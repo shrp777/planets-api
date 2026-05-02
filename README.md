@@ -2,13 +2,20 @@
 
 API REST exposant les 8 planètes du système solaire.
 
+## Variables d'environnement
+
+- Créer un fichier `.env` à partir du fichier `.env.example`
+
+- **PORT** = port employé dans le conteneur Docker
+- **EXTERNAL_PORT** = port employé sur la machine hôte
+
 ## Lancement de l'API
 
 ```sh
 docker compose up --build
 ````
 
-## Endpoints
+## Endpoints exposés
 
 - HTTP GET /planets
 
@@ -44,7 +51,7 @@ docker compose up --build
 
 !["Logotype Shrp"](https://sherpa.one/images/sherpa-logotype.png)
 
-__Alexandre Leroux__  
+**Alexandre Leroux**  
 _Enseignant / Formateur_  
 _Développeur logiciel web & mobile_
 
