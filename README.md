@@ -2,6 +2,12 @@
 
 API REST exposant les 8 planètes du système solaire.
 
+## Lancement de l'API
+
+```sh
+docker compose up --build
+````
+
 ## Endpoints
 
 - HTTP GET /planets
