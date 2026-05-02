@@ -1,8 +1,11 @@
 import { Hono } from "hono";
+import { trimTrailingSlash } from "hono/trailing-slash";
+
 import { planets } from "./planets";
 import { toSummary } from "./utils";
 
 export const app = new Hono();
+app.use(trimTrailingSlash());
 
 app.get("/planets", (c) => {
   return c.json(
