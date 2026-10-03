@@ -1,0 +1,25 @@
+meta {
+  name: Planet without moons
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/planets/:id/moons
+  body: none
+  auth: none
+}
+
+params:path {
+  id: mercury
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.length: eq 0
+}
+
+docs {
+  An empty collection answers 200 with an empty list, not 404.
+}

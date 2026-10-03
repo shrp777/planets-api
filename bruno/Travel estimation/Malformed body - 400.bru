@@ -1,0 +1,27 @@
+meta {
+  name: Malformed body - 400
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/travel-estimation
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "from": "earth",
+    "speedKmPerSecond": "17"
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.success: eq false
+}
+
+docs {
+  `to` is missing and `speedKmPerSecond` has the wrong type: the request is malformed.
+}

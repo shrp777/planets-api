@@ -1,0 +1,26 @@
+meta {
+  name: Moon of another planet
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/planets/:id/moons/:moonId
+  body: none
+  auth: none
+}
+
+params:path {
+  id: mars
+  moonId: europa
+}
+
+assert {
+  res.status: eq 404
+  res.body.success: eq false
+  res.body.error: eq Moon not found
+}
+
+docs {
+  Europa exists, but it does not orbit Mars.
+}

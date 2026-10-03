@@ -1,0 +1,17 @@
+meta {
+  name: Unknown route
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/foo
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 404
+  res.body.success: eq false
+  res.body.error: eq Route not found
+}

@@ -1,0 +1,23 @@
+meta {
+  name: Get moon
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/planets/:id/moons/:moonId
+  body: none
+  auth: none
+}
+
+params:path {
+  id: jupiter
+  moonId: europa
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.name: eq Europa
+  res.body.data.links.planet: eq /planets/jupiter
+}

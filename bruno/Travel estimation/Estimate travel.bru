@@ -1,0 +1,30 @@
+meta {
+  name: Estimate travel
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/travel-estimation
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "from": "earth",
+    "to": "mars",
+    "speedKmPerSecond": 17
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.distanceKm: eq 77790893
+  res.body.data.durationDays: eq 53
+}
+
+docs {
+  Business operation: nothing is created, so the answer is 200 and not 201.
+}

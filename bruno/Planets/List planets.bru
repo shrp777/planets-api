@@ -1,0 +1,21 @@
+meta {
+  name: List planets
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/planets
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.length: eq 8
+}
+
+docs {
+  The response carries `Cache-Control` and `ETag` headers.
+}

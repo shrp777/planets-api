@@ -1,0 +1,21 @@
+meta {
+  name: Moons of an unknown planet
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/planets/:id/moons
+  body: none
+  auth: none
+}
+
+params:path {
+  id: pluto
+}
+
+assert {
+  res.status: eq 404
+  res.body.success: eq false
+  res.body.error: eq Planet not found
+}

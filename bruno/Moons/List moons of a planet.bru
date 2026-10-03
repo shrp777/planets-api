@@ -1,0 +1,25 @@
+meta {
+  name: List moons of a planet
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/planets/:id/moons
+  body: none
+  auth: none
+}
+
+params:path {
+  id: mars
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.length: eq 2
+}
+
+docs {
+  Nested resource: the moons are only reachable through their planet.
+}

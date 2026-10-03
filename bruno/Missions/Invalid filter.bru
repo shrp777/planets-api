@@ -1,0 +1,20 @@
+meta {
+  name: Invalid filter
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/missions?agency=SpaceX
+  body: none
+  auth: none
+}
+
+params:query {
+  agency: SpaceX
+}
+
+assert {
+  res.status: eq 400
+  res.body.success: eq false
+}

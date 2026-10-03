@@ -1,0 +1,22 @@
+meta {
+  name: Get planet
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/planets/:id
+  body: none
+  auth: none
+}
+
+params:path {
+  id: earth
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.name: eq Earth
+  res.body.data.links.moons: eq /planets/earth/moons
+}

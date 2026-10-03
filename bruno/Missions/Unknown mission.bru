@@ -1,0 +1,21 @@
+meta {
+  name: Unknown mission
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/missions/:id
+  body: none
+  auth: none
+}
+
+params:path {
+  id: apollo-11
+}
+
+assert {
+  res.status: eq 404
+  res.body.success: eq false
+  res.body.error: eq Mission not found
+}

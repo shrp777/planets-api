@@ -1,0 +1,24 @@
+meta {
+  name: Invalid filter
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/planets?type=dwarf
+  body: none
+  auth: none
+}
+
+params:query {
+  type: dwarf
+}
+
+assert {
+  res.status: eq 400
+  res.body.success: eq false
+}
+
+docs {
+  An invalid query parameter answers 400.
+}

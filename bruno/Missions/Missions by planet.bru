@@ -1,0 +1,25 @@
+meta {
+  name: Missions by planet
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/missions?planet=saturn
+  body: none
+  auth: none
+}
+
+params:query {
+  planet: saturn
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.length: eq 4
+}
+
+docs {
+  Many-to-many relation: it is expressed with a filter, not by nesting.
+}

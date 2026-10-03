@@ -26,6 +26,19 @@ bun test           # tests
 bun run typecheck  # vérification des types
 ```
 
+## Collection Bruno
+
+Le dossier `bruno/` contient une collection [Bruno](https://www.usebruno.com) couvrant tous les endpoints, cas d'erreur compris (`400`, `404`, `409`, `422`).
+
+- Dans Bruno : _Open Collection_, puis sélectionner le dossier `bruno/`.
+- Choisir l'environnement `Local` (`http://localhost:3000`, pour `bun run dev`) ou `Docker` (`http://localhost:8079`, la valeur d'`EXTERNAL_PORT` dans `.env.example`).
+- Chaque requête porte des assertions ; toute la collection peut s'exécuter en ligne de commande :
+
+```sh
+cd bruno
+bunx @usebruno/cli run -r --env Local
+```
+
 ## Endpoints exposés
 
 | Méthode | Route              | Description                                     |

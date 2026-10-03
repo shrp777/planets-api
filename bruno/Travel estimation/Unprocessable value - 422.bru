@@ -1,0 +1,28 @@
+meta {
+  name: Unprocessable value - 422
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/travel-estimation
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "from": "earth",
+    "to": "pluto",
+    "speedKmPerSecond": -5
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.success: eq false
+}
+
+docs {
+  The body is well-formed, but the planet is unknown and the speed is not positive.
+}

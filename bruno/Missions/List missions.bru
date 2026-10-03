@@ -1,0 +1,17 @@
+meta {
+  name: List missions
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/missions
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.length: eq 18
+}

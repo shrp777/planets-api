@@ -1,0 +1,26 @@
+meta {
+  name: Get mission
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/missions/:id
+  body: none
+  auth: none
+}
+
+params:path {
+  id: voyager-2
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.planets.length: eq 4
+  res.body.data.planets[0].id: eq jupiter
+}
+
+docs {
+  The planets are listed in the order they were visited.
+}

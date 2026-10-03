@@ -1,0 +1,28 @@
+meta {
+  name: Conflicting values - 409
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/travel-estimation
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "from": "earth",
+    "to": "earth",
+    "speedKmPerSecond": 17
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.success: eq false
+}
+
+docs {
+  Each value is valid on its own, but `from` and `to` are the same planet.
+}
