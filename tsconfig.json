@@ -1,11 +1,15 @@
 {
   "compilerOptions": {
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
     "types": [
       "bun",
       "node"
     ],
     "strict": true,
-    "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx"
-  }
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src"]
 }
