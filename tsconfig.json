@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
     "types": [
-      "bun"
+      "bun",
+      "node"
     ],
     "strict": true,
     "jsx": "react-jsx",
