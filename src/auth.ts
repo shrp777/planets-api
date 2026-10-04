@@ -27,6 +27,9 @@ export type AuthUser = { id: string; email: string; role: UserRole };
 // chiffré : son payload est lisible par quiconque le détient)
 export type TokenUser = Pick<AuthUser, "id" | "role">;
 
+// L'utilisateur du token, mis à disposition des routes par authenticate
+export type AuthEnv = { Variables: { user: TokenUser } };
+
 // Lu à chaque appel : un secret manquant provoque une erreur explicite au lieu
 // de signer des tokens avec une clé vide
 const secret = () => {
@@ -107,9 +110,7 @@ const verifyToken = async (
 // Accepte le token depuis l'en-tête Authorization (clients d'API) ou depuis le
 // cookie httpOnly (front end dans un navigateur) ; l'en-tête l'emporte quand
 // les deux sont envoyés
-export const authenticate = createMiddleware<{
-  Variables: { user: TokenUser };
-}>(async (c, next) => {
+export const authenticate = createMiddleware<AuthEnv>(async (c, next) => {
   const key = secret();
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
   const token = bearer ?? getCookie(c, AUTH_COOKIE);

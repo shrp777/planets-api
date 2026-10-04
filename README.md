@@ -2,6 +2,14 @@
 
 API REST exposant les 8 planètes du système solaire.
 
+## Documentation
+
+Le dossier [docs/](docs/README.md) explique les choix de conception de l'API :
+
+- [Architecture](docs/architecture.md) : pile technique, organisation du code, parcours d'une requête, conventions REST
+- [Ressources](docs/ressources.md) : ressources exposées et relations entre elles
+- [Authentification](docs/authentification.md) : token JWT, routes privées, filtrage selon l'utilisateur
+
 ## Variables d'environnement
 
 - Créer un fichier `.env` à partir du fichier `.env.example`
@@ -207,10 +215,24 @@ Paramètres de requête optionnels, combinables :
 | `planet`  | identifiant d'une planète             | `?planet=saturn`    |
 | `agency`  | `NASA`, `ESA`, `JAXA`, `ISRO`, `CNSA` | `?agency=ESA`       |
 | `status`  | `active`, `completed`                 | `?status=active`    |
+| `participating` | `true`, `false`                 | `?participating=true` |
 | `sort`    | `launchDate`, `name`                  | `?sort=-launchDate` |
 
 - `agency` est l'agence principale de la mission.
+- `participating` filtre selon la participation de l'utilisateur connecté : `true` ne garde que ses missions, `false` que les autres (voir ci-dessous).
 - Une valeur invalide renvoie un `400` ; une planète sans mission (ex : `?planet=earth`) renvoie un `200` avec `"data": []`.
+
+#### Filtrer selon l'utilisateur connecté
+
+L'API gère une association plusieurs-à-plusieurs entre les utilisateurs et les missions (`src/participations.ts`) : John Doe participe à `juno`, `curiosity` et `perseverance`.
+
+```sh
+curl "http://localhost:3000/missions?participating=true" -H "Authorization: Bearer <accessToken>"
+```
+
+- L'utilisateur est identifié par la revendication `sub` du token, jamais par un paramètre : il n'existe pas de `?userId=...`. Le client ne peut donc pas demander les participations de quelqu'un d'autre, puisqu'il ne peut pas modifier le token sans en invalider la signature.
+- La même URL renvoie un contenu différent selon l'utilisateur. C'est une raison de plus pour que ces réponses soient en `Cache-Control: private` : un cache partagé pourrait servir à un utilisateur la liste d'un autre.
+- Le filtre se combine avec les autres (ex : `?participating=true&planet=mars`).
 
 Exemple pour `/missions?planet=uranus` :
 

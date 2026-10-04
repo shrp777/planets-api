@@ -304,6 +304,13 @@ export const openApiDocument = {
             schema: { type: "string", enum: MISSION_STATUSES },
           },
           {
+            name: "participating",
+            in: "query",
+            description:
+              "true: only the missions the authenticated user takes part in; false: only the others. The user is identified by the sub claim of the token",
+            schema: { type: "string", enum: ["true", "false"] },
+          },
+          {
             name: "sort",
             in: "query",
             description:

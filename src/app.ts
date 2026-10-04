@@ -5,6 +5,7 @@ import { HTTPException } from "hono/http-exception";
 import { trimTrailingSlash } from "hono/trailing-slash";
 
 import {
+  type AuthEnv,
   authenticate,
   checkCredentials,
   clearAuthCookie,
@@ -16,6 +17,7 @@ import {
 import { missions } from "./missions";
 import { moons } from "./moons";
 import { openApiDocument } from "./openapi";
+import { participations } from "./participations";
 import { planets } from "./planets";
 import {
   loginSchema,
@@ -35,7 +37,7 @@ import {
   toSummary,
 } from "./utils";
 
-export const app = new Hono();
+export const app = new Hono<AuthEnv>();
 app.use(trimTrailingSlash());
 
 // Les données publiques sont ouvertes à toutes les origines. Les routes d'auth
@@ -210,7 +212,7 @@ app.get("/planets/:id/moons/:moonId", (c) => {
 // (plusieurs-à-plusieurs), la relation s'exprime donc par un filtre plutôt que
 // par une imbrication
 app.get("/missions", validate("query", missionsQuerySchema), (c) => {
-  const { planet, agency, status, sort } = c.req.valid("query");
+  const { planet, agency, status, participating, sort } = c.req.valid("query");
   let result = missions;
 
   if (planet !== undefined) {
@@ -221,6 +223,15 @@ app.get("/missions", validate("query", missionsQuerySchema), (c) => {
   }
   if (status !== undefined) {
     result = result.filter((m) => m.status === status);
+  }
+  if (participating !== undefined) {
+    // L'id vient du token, jamais d'un paramètre fourni par le client : un
+    // utilisateur ne peut pas consulter les participations d'un autre
+    const userId = c.get("user").id;
+    const missionIds = participations
+      .filter((p) => p.userId === userId)
+      .map((p) => p.missionId);
+    result = result.filter((m) => missionIds.includes(m.id) === participating);
   }
   if (sort !== undefined) {
     result = sortBy(result, sort.field, sort.descending);

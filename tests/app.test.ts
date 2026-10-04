@@ -297,6 +297,35 @@ describe("GET /missions", () => {
     }
   });
 
+  test("filters by the participation of the user of the token", async () => {
+    const mine = await authRequest("/missions?participating=true");
+    expect(ids(await mine.json())).toEqual(["juno", "curiosity", "perseverance"]);
+
+    const others = await authRequest("/missions?participating=false");
+    const otherIds = ids(await others.json());
+    expect(otherIds).toHaveLength(15);
+    expect(otherIds).not.toContain("juno");
+  });
+
+  test("combines participating with the other filters", async () => {
+    const res = await authRequest("/missions?participating=true&planet=mars");
+    expect(ids(await res.json())).toEqual(["curiosity", "perseverance"]);
+  });
+
+  test("the participations depend on the user id of the token", async () => {
+    const token = await createToken({ id: crypto.randomUUID(), role: "astronaut" });
+    const headers = { Authorization: `Bearer ${token}` };
+    const mine = await app.request("/missions?participating=true", { headers });
+    expect(ids(await mine.json())).toEqual([]);
+    const others = await app.request("/missions?participating=false", { headers });
+    expect(ids(await others.json())).toHaveLength(18);
+  });
+
+  test("rejects an invalid participating value with a 400", async () => {
+    const res = await authRequest("/missions?participating=me");
+    expect(res.status).toBe(400);
+  });
+
   test("returns an empty list for a planet without missions", async () => {
     const res = await authRequest("/missions?planet=earth");
     expect(res.status).toBe(200);

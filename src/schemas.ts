@@ -46,6 +46,10 @@ export const missionsQuerySchema = z.object({
   planet: planetId.optional(),
   agency: z.enum(AGENCIES).optional(),
   status: z.enum(MISSION_STATUSES).optional(),
+  participating: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
+    .optional(),
   sort: sort(MISSION_SORTABLE_FIELDS).optional(),
 });
 

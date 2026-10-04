@@ -116,3 +116,8 @@ export type TokenDelivery = (typeof TOKEN_DELIVERIES)[number];
 export const USER_ROLES = ["astronaut"] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
+
+export type Participation = {
+  userId: string;
+  missionId: string;
+};
