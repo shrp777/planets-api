@@ -64,6 +64,7 @@ bunx @usebruno/cli run -r --env Local
 | POST    | `/missions` | 🔒 Création d'une mission, avec le statut `planned` |
 | GET     | `/missions/{id}` | 🔒 Détail d'une mission (ex : `/missions/0c262d45-6bf0-427a-940d-6b02827a0e15`) |
 | PATCH   | `/missions/{id}` | 🔒 Mise à jour du statut d'une mission (`active`, puis `completed`) |
+| DELETE  | `/missions/{id}` | 🔒 Suppression d'une mission, tant que son statut est `planned` |
 | POST    | `/travel-estimation` | Calcul d'une estimation de trajet entre deux planètes |
 | POST    | `/auth/login` | Authentification, le token JWT est renvoyé dans le corps ou déposé dans un cookie `httpOnly` (champ `delivery`) |
 | POST    | `/auth/logout` | Suppression du cookie d'authentification |
@@ -71,7 +72,7 @@ bunx @usebruno/cli run -r --env Local
 
 Les routes marquées 🔒 sont privées : elles exigent un token JWT valide (voir [Authentification](#authentification)).
 
-- Toutes les réponses sont au format JSON et comportent un champ `success`.
+- Toutes les réponses sont au format JSON et comportent un champ `success`, sauf le `204` de `DELETE /missions/{id}`, qui n'a pas de corps.
 - Les routes `/planets` renvoient les en-têtes `Cache-Control: public, max-age=3600` et `ETag` (une requête `If-None-Match` à jour reçoit un `304`).
 - Les lectures (`GET`) des routes `/missions`, privées, renvoient `Cache-Control: private, no-cache` et `ETag` : la réponse n'est jamais stockée par un cache partagé, et le navigateur la revalide à chaque fois, ce qui revérifie le token.
 - CORS est ouvert à toutes les origines, sauf pour les routes `/auth/*` et `/missions` : elles acceptent les cookies (`Access-Control-Allow-Credentials: true`) et ne sont donc ouvertes qu'aux origines listées dans `CORS_ORIGIN`.
@@ -88,7 +89,7 @@ Les routes marquées 🔒 sont privées : elles exigent un token JWT valide (voi
     "openapi": "/openapi.json",
     "planets": ["/planets", "/planets/{id}"],
     "moons": ["/planets/{id}/moons", "/planets/{id}/moons/{moonId}"],
-    "missions": ["/missions", "POST /missions", "/missions/{id}", "PATCH /missions/{id}"],
+    "missions": ["/missions", "POST /missions", "/missions/{id}", "PATCH /missions/{id}", "DELETE /missions/{id}"],
     "travelEstimation": "POST /travel-estimation",
     "auth": ["POST /auth/login", "POST /auth/logout", "/auth/me"]
   }
@@ -367,6 +368,29 @@ La réponse est un `200` avec la représentation complète de la mission, comme 
 
 Comme la persistance est simulée en mémoire, le changement de statut est lui aussi perdu au redémarrage du serveur.
 
+### DELETE /missions/{id}
+
+Route privée. Supprime une mission, à condition que son statut soit `planned` : une mission lancée (`active` ou `completed`) ne peut plus être supprimée.
+
+```sh
+curl -i -X DELETE http://localhost:3000/missions/0b6f1c1e-7d2a-4c53-9a55-3f0e8f6f2b41 \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+```
+HTTP/1.1 204 No Content
+```
+
+- La réponse est un `204` : la suppression a réussi et il n'y a plus rien à renvoyer, la réponse n'a donc pas de corps.
+- Une mission `active` ou `completed` renvoie un `409` : la requête est valide, mais en conflit avec l'état de la mission. Les 18 missions d'origine ne sont donc pas supprimables.
+- Supprimer une seconde fois la même mission renvoie un `404`, comme pour un identifiant inconnu. `DELETE` reste idempotent : l'état du serveur est le même après un ou plusieurs appels, seul le statut de la réponse change.
+
+| Statut | Cas                              |
+| ------ | -------------------------------- |
+| `401`  | Token absent, invalide ou expiré |
+| `404`  | Mission inconnue ou déjà supprimée |
+| `409`  | Mission `active` ou `completed`  |
+
 ### POST /travel-estimation
 
 Opération métier : calcule la distance entre deux planètes et la durée du trajet à vitesse constante.
@@ -531,6 +555,7 @@ Le middleware `authenticate` de `src/auth.ts` protège de la même façon toutes
 | ------ | ------------------------------ | --------------------------------------------------------- |
 | 400    | Paramètre de requête invalide, ou corps mal formé | `{ "success": false, "error": "Invalid planet: expected one of: ..." }` |
 | 409    | Corps dont les valeurs sont en conflit | `{ "success": false, "error": "Conflict between from and to: expected two different planets" }` |
+| 409    | Suppression d'une mission lancée | `{ "success": false, "error": "Conflict on status: only a planned mission can be deleted" }` |
 | 409    | Changement de statut impossible | `{ "success": false, "error": "Conflict on status: a planned mission can only become active" }` |
 | 422    | Corps bien formé avec une valeur non traitable | `{ "success": false, "error": "Invalid speedKmPerSecond: Too small: expected number to be >0" }` |
 | 401    | Identifiants incorrects | `{ "success": false, "error": "Invalid credentials" }` |

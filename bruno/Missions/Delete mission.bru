@@ -1,0 +1,23 @@
+meta {
+  name: Delete mission
+  type: http
+  seq: 18
+}
+
+delete {
+  url: {{baseUrl}}/missions/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: {{plannedMissionId}}
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  The mission created by `Create mission to delete` is still planned, so it can be removed: the answer is 204, without a body.
+}

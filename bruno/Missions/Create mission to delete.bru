@@ -1,0 +1,33 @@
+meta {
+  name: Create mission to delete
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/missions
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "Dragonfly",
+    "agency": "NASA",
+    "planets": ["saturn"],
+    "description": "A rotorcraft that will explore Titan."
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.data.status: eq planned
+}
+
+script:post-response {
+  bru.setVar("plannedMissionId", res.body.data.id);
+}
+
+docs {
+  A second mission, left with the `planned` status so that `Delete mission` can remove it.
+}

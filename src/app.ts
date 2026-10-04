@@ -87,6 +87,7 @@ app.get("/", (c) => {
           "POST /missions",
           "/missions/{id}",
           "PATCH /missions/{id}",
+          "DELETE /missions/{id}",
         ],
         travelEstimation: "POST /travel-estimation",
         auth: [
@@ -345,6 +346,33 @@ app.patch("/missions/:id", validate("json", missionStatusSchema), (c) => {
     },
     200,
   );
+});
+
+// Suppression : la mission est retirée de la liste en mémoire. Il n'y a plus
+// rien à renvoyer : la réponse est un 204, sans corps
+app.delete("/missions/:id", (c) => {
+  const id = c.req.param("id").toLowerCase();
+  const index = missions.findIndex((m) => m.id === id);
+  const mission = missions[index];
+  if (!mission) {
+    return c.json({ success: false, error: "Mission not found" }, 404);
+  }
+
+  // Une mission lancée fait partie de l'historique : seule une mission encore
+  // planifiée peut être supprimée. La requête est valide, mais en conflit avec
+  // l'état de la mission
+  if (mission.status !== "planned") {
+    return c.json(
+      {
+        success: false,
+        error: "Conflict on status: only a planned mission can be deleted",
+      },
+      409,
+    );
+  }
+
+  missions.splice(index, 1);
+  return c.body(null, 204);
 });
 
 // Opération métier : POST lance un calcul à partir du corps de la requête.

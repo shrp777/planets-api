@@ -25,6 +25,7 @@ rectangle "Planets API" {
     usecase "Filtrer les missions\nselon sa participation" as UC10
     usecase "Créer une mission" as UC14
     usecase "Mettre à jour le statut\nd'une mission" as UC15
+    usecase "Supprimer une mission\nplanifiée" as UC16
     usecase "Consulter son profil" as UC11
     usecase "Se déconnecter" as UC12
     usecase "Vérifier le token" as UC13
@@ -43,6 +44,7 @@ Astronaute --> UC8
 Astronaute --> UC9
 Astronaute --> UC14
 Astronaute --> UC15
+Astronaute --> UC16
 Astronaute --> UC11
 Astronaute --> UC12
 
@@ -51,5 +53,6 @@ UC8 ..> UC13 : <<include>>
 UC9 ..> UC13 : <<include>>
 UC14 ..> UC13 : <<include>>
 UC15 ..> UC13 : <<include>>
+UC16 ..> UC13 : <<include>>
 UC11 ..> UC13 : <<include>>
 @enduml

@@ -683,6 +683,57 @@ describe("PATCH /missions/:id", () => {
   });
 });
 
+describe("DELETE /missions/:id", () => {
+  const deleteMission = async (id: string) =>
+    app.request(`/missions/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${await createToken(user)}` },
+    });
+
+  test("requires a token", async () => {
+    const res = await app.request(`/missions/${dragonflyId}`, {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(401);
+    expect((await authRequest(`/missions/${dragonflyId}`)).status).toBe(200);
+  });
+
+  test("deletes a planned mission and answers 204 without a body", async () => {
+    const res = await deleteMission(dragonflyId.toUpperCase());
+    expect(res.status).toBe(204);
+    expect(await res.text()).toBe("");
+    expect(res.headers.get("Cache-Control")).toBeNull();
+
+    expect((await authRequest(`/missions/${dragonflyId}`)).status).toBe(404);
+    const list = await (await authRequest("/missions")).json();
+    expect(ids(list)).not.toContain(dragonflyId);
+  });
+
+  test("returns 404 for a mission already deleted or unknown", async () => {
+    for (const id of [dragonflyId, crypto.randomUUID(), "apollo-11"]) {
+      const res = await deleteMission(id);
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({
+        success: false,
+        error: "Mission not found",
+      });
+    }
+  });
+
+  test("refuses to delete an active or completed mission", async () => {
+    // Juno est active, la mission créée plus haut est maintenant terminée
+    for (const id of [JUNO, europaClipperId]) {
+      const res = await deleteMission(id);
+      expect(res.status).toBe(409);
+      expect(await res.json()).toEqual({
+        success: false,
+        error: "Conflict on status: only a planned mission can be deleted",
+      });
+      expect((await authRequest(`/missions/${id}`)).status).toBe(200);
+    }
+  });
+});
+
 const postEstimate = (body: unknown) =>
   app.request("/travel-estimation", {
     method: "POST",

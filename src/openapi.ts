@@ -479,6 +479,21 @@ export const openApiDocument = {
           ),
         },
       },
+      delete: {
+        summary: "Delete a mission",
+        description:
+          "Only a planned mission can be deleted: once active or completed, it is kept. Deleting it again answers 404.",
+        security: [{ bearerAuth: [] }, { cookieAuth: [] }],
+        parameters: [missionIdParameter],
+        responses: {
+          "204": { description: "Mission deleted, no content" },
+          "401": errorResponse("Missing, invalid or expired token"),
+          "404": errorResponse("Mission not found"),
+          "409": errorResponse(
+            "Conflict: the mission is active or completed, only a planned mission can be deleted",
+          ),
+        },
+      },
     },
     "/travel-estimation": {
       post: {

@@ -77,7 +77,7 @@ Deux gestionnaires globaux complètent le tout : une route inconnue renvoie un `
 
 ### Enveloppe des réponses
 
-Toutes les réponses ont la même forme, ce qui permet à un client de les traiter de façon uniforme :
+Toutes les réponses qui ont un corps ont la même forme, ce qui permet à un client de les traiter de façon uniforme (seul le `204` d'une suppression n'en a pas) :
 
 ```json
 { "success": true, "data": { }, "message": "..." }
@@ -101,11 +101,12 @@ Chaque représentation porte un objet `links` : son propre lien (`self`) et les 
 | --- | --- |
 | `200` | Succès, y compris pour une liste vide et pour `POST /travel-estimation` (rien n'est créé, donc pas de `201`) |
 | `201` | Ressource créée par `POST /missions`, avec son URL dans l'en-tête `Location` |
+| `204` | Succès sans contenu : mission supprimée par `DELETE /missions/{id}` |
 | `304` | La version en cache du client est à jour |
 | `400` | Requête mal formée : paramètre de requête invalide, JSON illisible, champ manquant ou du mauvais type |
 | `401` | Identifiants incorrects, ou token absent, invalide ou expiré |
 | `404` | La ressource désignée par l'URL n'existe pas |
-| `409` | Valeurs valides isolément mais en conflit entre elles (`from` et `to` identiques) ou avec l'état d'une ressource (changement de statut impossible) |
+| `409` | Valeurs valides isolément mais en conflit entre elles (`from` et `to` identiques) ou avec l'état d'une ressource (changement de statut impossible, suppression d'une mission lancée) |
 | `422` | Corps bien formé, mais une valeur ne peut pas être traitée (planète inconnue, vitesse négative) |
 | `500` | Erreur interne |
 

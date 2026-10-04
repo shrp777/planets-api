@@ -12,7 +12,7 @@ Source : [schemas/modele-domaine.puml](schemas/modele-domaine.puml)
 | --- | --- | --- | --- |
 | Planète | 8 | public | `/planets`, `/planets/{id}` |
 | Lune | 22 | public | `/planets/{id}/moons`, `/planets/{id}/moons/{moonId}` |
-| Mission | 18 au démarrage | privé | `/missions`, `POST /missions`, `/missions/{id}`, `PATCH /missions/{id}` |
+| Mission | 18 au démarrage | privé | `/missions`, `POST /missions`, `/missions/{id}`, `PATCH /missions/{id}`, `DELETE /missions/{id}` |
 | Utilisateur | 1 | privé | `/auth/me` |
 | Estimation de trajet | calculée | public | `POST /travel-estimation` |
 
@@ -93,7 +93,7 @@ Une mission peut étudier plusieurs planètes, et une planète est étudiée par
 
 ### Création
 
-La mission est la seule ressource que l'API permet de créer et de modifier. `POST /missions` ajoute une mission à la collection.
+La mission est la seule ressource que l'API permet de créer, de modifier et de supprimer. `POST /missions` ajoute une mission à la collection.
 
 - Le client envoie `name`, `agency`, `planets` et `description`. Il ne choisit ni l'identifiant, un UUID généré par le serveur, ni le statut, toujours `planned`, ni la date de lancement, encore inconnue (`null`).
 - La réponse est un `201` : elle porte l'URL de la nouvelle mission dans l'en-tête `Location` et sa représentation complète dans le corps.
@@ -113,9 +113,17 @@ La date de lancement dépend du statut : elle n'est renseignée que lorsque la m
 
 Le cycle est à sens unique. Un statut qui n'est pas le suivant renvoie un `409` : la valeur est valide, mais en conflit avec l'état actuel de la mission. Un statut inconnu renvoie un `422`.
 
+### Suppression
+
+`DELETE /missions/{id}` supprime une mission, à condition que son statut soit `planned`.
+
+- La réponse est un `204` sans corps : la suppression a réussi, il n'y a plus de représentation à renvoyer.
+- Une mission `active` ou `completed` renvoie un `409` : une mission lancée fait partie de l'historique et ne se supprime plus. C'est le même raisonnement que pour le cycle de vie : la requête est valide, mais en conflit avec l'état de la ressource.
+- Une mission déjà supprimée renvoie un `404`, comme un identifiant inconnu. `DELETE` reste **idempotent** : répéter l'appel ne change pas l'état du serveur, seul le statut de la réponse diffère.
+
 ### Persistance simulée
 
-L'API n'a pas de base de données. La liste des missions (`src/missions.ts`) en tient lieu : une mission créée y est ajoutée, un changement de statut y est appliqué. Les autres routes voient donc aussitôt le résultat (liste, filtres, détail), mais tout est perdu au redémarrage du serveur, qui repart des 18 missions d'origine.
+L'API n'a pas de base de données. La liste des missions (`src/missions.ts`) en tient lieu : une mission créée y est ajoutée, un changement de statut y est appliqué, une mission supprimée en est retirée. Les autres routes voient donc aussitôt le résultat (liste, filtres, détail), mais tout est perdu au redémarrage du serveur, qui repart des 18 missions d'origine.
 
 ## Utilisateur et participation
 

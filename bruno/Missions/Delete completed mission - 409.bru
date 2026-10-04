@@ -1,0 +1,25 @@
+meta {
+  name: Delete completed mission - 409
+  type: http
+  seq: 16
+}
+
+delete {
+  url: {{baseUrl}}/missions/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: {{missionId}}
+}
+
+assert {
+  res.status: eq 409
+  res.body.success: eq false
+  res.body.error: eq Conflict on status: only a planned mission can be deleted
+}
+
+docs {
+  The mission has been started then completed by the previous requests: only a planned mission can be deleted.
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Deleted mission - 404
+  type: http
+  seq: 19
+}
+
+delete {
+  url: {{baseUrl}}/missions/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: {{plannedMissionId}}
+}
+
+assert {
+  res.status: eq 404
+  res.body.success: eq false
+  res.body.error: eq Mission not found
+}
+
+docs {
+  The mission no longer exists: deleting it a second time answers 404.
+}
