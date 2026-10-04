@@ -1,0 +1,28 @@
+meta {
+  name: Unknown delivery - 422
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "john@doe.com",
+    "password": "azerty",
+    "delivery": "header"
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.success: eq false
+}
+
+docs {
+  The body is well-formed, but `delivery` only accepts `token` or `cookie`.
+}

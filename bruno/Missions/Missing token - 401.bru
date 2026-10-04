@@ -1,0 +1,21 @@
+meta {
+  name: Missing token - 401
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/missions
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 401
+  res.body.success: eq false
+  res.headers['www-authenticate']: eq Bearer
+}
+
+docs {
+  No token is sent (`auth: none` overrides the folder): the missions routes are private.
+}

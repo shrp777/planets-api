@@ -1,0 +1,20 @@
+meta {
+  name: Current user with cookie
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/auth/me
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.data.email: eq john@doe.com
+}
+
+docs {
+  No `Authorization` header: the cookie set by `Login with cookie` is sent back by the cookie jar.
+}

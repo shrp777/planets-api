@@ -1,7 +1,8 @@
 import type { Mission } from "./types";
 
-// A mission can study several planets, so it is not nested under a planet.
-// The planets of a mission are listed in the order they were visited.
+// Une mission peut étudier plusieurs planètes, elle n'est donc pas imbriquée
+// sous une planète. Les planètes d'une mission sont listées dans l'ordre de
+// visite.
 export const missions: Mission[] = [
   {
     id: "pioneer-11",

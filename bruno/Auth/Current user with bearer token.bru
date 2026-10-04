@@ -1,0 +1,25 @@
+meta {
+  name: Current user with bearer token
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/auth/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.email: eq john@doe.com
+}
+
+docs {
+  Uses the token stored by the `Get token` request.
+}

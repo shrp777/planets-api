@@ -4,11 +4,20 @@ import { etag } from "hono/etag";
 import { HTTPException } from "hono/http-exception";
 import { trimTrailingSlash } from "hono/trailing-slash";
 
+import {
+  authenticate,
+  checkCredentials,
+  clearAuthCookie,
+  createToken,
+  setAuthCookie,
+  TOKEN_TTL_SECONDS,
+} from "./auth";
 import { missions } from "./missions";
 import { moons } from "./moons";
 import { openApiDocument } from "./openapi";
 import { planets } from "./planets";
 import {
+  loginSchema,
   missionsQuerySchema,
   planetsQuerySchema,
   travelEstimationSchema,
@@ -27,14 +36,29 @@ import {
 
 export const app = new Hono();
 app.use(trimTrailingSlash());
-app.use(cors());
+
+// Les données publiques sont ouvertes à toutes les origines. Les routes d'auth
+// et les routes privées transportent un cookie, que les navigateurs n'acceptent
+// que d'une origine explicitement autorisée (jamais de "*")
+const publicCors = cors();
+const credentialedCors = cors({
+  origin: (origin) => {
+    const allowed = (Bun.env.CORS_ORIGIN ?? "").split(",").map((o) => o.trim());
+    return allowed.includes(origin) ? origin : null;
+  },
+  credentials: true,
+});
+app.use((c, next) => {
+  const acceptsCookie = /^\/(auth|missions)(\/|$)/.test(c.req.path);
+  return acceptsCookie ? credentialedCors(c, next) : publicCors(c, next);
+});
 
 app.notFound((c) => {
   return c.json({ success: false, error: "Route not found" }, 404);
 });
 
 app.onError((err, c) => {
-  // Raised by Hono itself, e.g. for a malformed JSON body
+  // Levée par Hono lui-même, par exemple pour un corps JSON mal formé
   if (err instanceof HTTPException) {
     return c.json({ success: false, error: err.message }, err.status);
   }
@@ -54,6 +78,11 @@ app.get("/", (c) => {
         moons: ["/planets/{id}/moons", "/planets/{id}/moons/{moonId}"],
         missions: ["/missions", "/missions/{id}"],
         travelEstimation: "POST /travel-estimation",
+        auth: [
+          "POST /auth/login",
+          "POST /auth/logout",
+          "/auth/me",
+        ],
       },
     },
     200,
@@ -75,16 +104,27 @@ app.get("/openapi.json", (c) => {
   return c.json(openApiDocument, 200);
 });
 
-// The data is static: let clients and proxies cache it and revalidate with ETag
-for (const path of ["/planets/*", "/missions/*"]) {
-  app.use(path, etag());
-  app.use(path, async (c, next) => {
-    await next();
-    if (c.res.ok) {
-      c.header("Cache-Control", "public, max-age=3600");
-    }
-  });
-}
+// Les données sont statiques : les clients et les proxys peuvent les mettre en
+// cache et les revalider avec l'ETag
+app.use("/planets/*", etag());
+app.use("/planets/*", async (c, next) => {
+  await next();
+  if (c.res.ok) {
+    c.header("Cache-Control", "public, max-age=3600");
+  }
+});
+
+// Routes privées : un token valide est exigé. La réponse ne doit pas être
+// stockée par un cache partagé, et le navigateur doit la revalider à chaque
+// fois (no-cache) pour que le token soit de nouveau vérifié
+app.use("/missions/*", authenticate);
+app.use("/missions/*", etag());
+app.use("/missions/*", async (c, next) => {
+  await next();
+  if (c.res.ok) {
+    c.header("Cache-Control", "private, no-cache");
+  }
+});
 
 app.get("/planets", validate("query", planetsQuerySchema), (c) => {
   const { type, hasRings, sort } = c.req.valid("query");
@@ -126,7 +166,8 @@ app.get("/planets/:id", (c) => {
   );
 });
 
-// Nested resource: a moon is only reachable through the planet it orbits
+// Ressource imbriquée : une lune n'est accessible que par la planète autour de
+// laquelle elle orbite
 app.get("/planets/:id/moons", (c) => {
   const id = c.req.param("id").toLowerCase();
   const planet = planets.find((p) => p.id === id);
@@ -164,8 +205,9 @@ app.get("/planets/:id/moons/:moonId", (c) => {
   );
 });
 
-// Top-level collection: a mission can study several planets (many-to-many),
-// so the relation is expressed with a filter instead of nesting
+// Collection de premier niveau : une mission peut étudier plusieurs planètes
+// (plusieurs-à-plusieurs), la relation s'exprime donc par un filtre plutôt que
+// par une imbrication
 app.get("/missions", validate("query", missionsQuerySchema), (c) => {
   const { planet, agency, status, sort } = c.req.valid("query");
   let result = missions;
@@ -209,18 +251,19 @@ app.get("/missions/:id", (c) => {
   );
 });
 
-// Business operation: POST runs a calculation from the request body.
-// Nothing is created or stored, so it answers 200 (not 201) and is not cached
+// Opération métier : POST lance un calcul à partir du corps de la requête.
+// Rien n'est créé ni stocké, la réponse est donc un 200 (et non un 201) et
+// n'est pas mise en cache
 app.post(
   "/travel-estimation",
   validate("json", travelEstimationSchema),
   (c) => {
     const { from, to, speedKmPerSecond } = c.req.valid("json");
-    // The schema guarantees that both ids are known planets
+    // Le schéma garantit que les deux identifiants sont des planètes connues
     const origin = planets.find((p) => p.id === from)!;
     const destination = planets.find((p) => p.id === to)!;
 
-    // Each value is valid on its own, but the two conflict with each other
+    // Chaque valeur est valide isolément, mais les deux sont en conflit
     if (origin === destination) {
       return c.json(
         {
@@ -241,3 +284,66 @@ app.post(
     );
   },
 );
+
+// Un token ne doit jamais être stocké par un cache
+app.use("/auth/*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "no-store");
+});
+
+// Un seul endpoint, le champ delivery choisit le transport du token :
+// - "token" (par défaut), pour les clients d'API : le token est renvoyé dans le
+//   corps, puis transmis dans l'en-tête Authorization
+// - "cookie", pour un front end dans un navigateur : le token est uniquement
+//   déposé dans un cookie httpOnly, il est absent du corps pour que JavaScript
+//   ne puisse jamais le lire
+app.post("/auth/login", validate("json", loginSchema), async (c) => {
+  const { email, password, delivery } = c.req.valid("json");
+  if (!(await checkCredentials(email, password))) {
+    return c.json({ success: false, error: "Invalid credentials" }, 401);
+  }
+  const token = await createToken(email);
+
+  if (delivery === "cookie") {
+    setAuthCookie(c, token);
+    return c.json(
+      {
+        success: true,
+        data: { email: email.toLowerCase(), expiresIn: TOKEN_TTL_SECONDS },
+        message: "Authentication successful",
+      },
+      200,
+    );
+  }
+
+  return c.json(
+    {
+      success: true,
+      data: {
+        accessToken: token,
+        tokenType: "Bearer",
+        expiresIn: TOKEN_TTL_SECONDS,
+      },
+      message: "Authentication successful",
+    },
+    200,
+  );
+});
+
+// JavaScript ne peut pas supprimer un cookie httpOnly : c'est au serveur de le
+// faire
+app.post("/auth/logout", (c) => {
+  clearAuthCookie(c);
+  return c.json({ success: true, message: "Logged out" }, 200);
+});
+
+app.get("/auth/me", authenticate, (c) => {
+  return c.json(
+    {
+      success: true,
+      data: c.get("user"),
+      message: "Authenticated user",
+    },
+    200,
+  );
+});

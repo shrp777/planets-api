@@ -1,4 +1,16 @@
 meta {
   name: Missions
-  seq: 4
+  seq: 5
+}
+
+auth {
+  mode: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Private routes: every request of the folder inherits the bearer token stored by `Auth / Get token`, which must run first.
 }

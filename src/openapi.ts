@@ -4,6 +4,7 @@ import {
   MISSION_STATUSES,
   PLANET_TYPES,
   SORTABLE_FIELDS,
+  TOKEN_DELIVERIES,
 } from "./types";
 
 const errorResponse = (description: string) => ({
@@ -14,6 +15,35 @@ const errorResponse = (description: string) => ({
     },
   },
 });
+
+const expiresIn = {
+  type: "integer",
+  description: "Lifetime in seconds",
+  example: 3600,
+};
+
+const successResponse = (description: string, data?: object) => ({
+  description,
+  content: {
+    "application/json": {
+      schema: {
+        type: "object",
+        required: data ? ["success", "data", "message"] : ["success", "message"],
+        properties: {
+          success: { type: "boolean" },
+          ...(data ? { data } : {}),
+          message: { type: "string" },
+        },
+      },
+    },
+  },
+});
+
+const authUser = {
+  type: "object",
+  required: ["email"],
+  properties: { email: { type: "string", example: "john@doe.com" } },
+};
 
 const links = {
   type: "object",
@@ -246,6 +276,7 @@ export const openApiDocument = {
     "/missions": {
       get: {
         summary: "List space missions (summary)",
+        security: [{ bearerAuth: [] }, { cookieAuth: [] }],
         parameters: [
           {
             name: "planet",
@@ -300,12 +331,14 @@ export const openApiDocument = {
             },
           },
           "400": errorResponse("Invalid query parameter"),
+          "401": errorResponse("Missing, invalid or expired token"),
         },
       },
     },
     "/missions/{id}": {
       get: {
         summary: "Get a mission by id",
+        security: [{ bearerAuth: [] }, { cookieAuth: [] }],
         parameters: [
           {
             name: "id",
@@ -332,6 +365,7 @@ export const openApiDocument = {
               },
             },
           },
+          "401": errorResponse("Missing, invalid or expired token"),
           "404": errorResponse("Mission not found"),
         },
       },
@@ -396,8 +430,101 @@ export const openApiDocument = {
         },
       },
     },
+    "/auth/login": {
+      post: {
+        summary: "Authenticate and get a JWT",
+        description:
+          'The delivery field selects how the token is returned. "token" (default), for API clients: the token is in the body and is then sent in the Authorization header (Bearer). "cookie", for a browser front end: the token is set in the access_token cookie (HttpOnly, SameSite=Lax) and is not present in the body.',
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["email", "password"],
+                properties: {
+                  email: { type: "string", example: "john@doe.com" },
+                  password: { type: "string", example: "azerty" },
+                  delivery: {
+                    type: "string",
+                    enum: TOKEN_DELIVERIES,
+                    default: "token",
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            ...successResponse("JWT valid for one hour", {
+              oneOf: [
+                {
+                  title: "delivery: token",
+                  type: "object",
+                  required: ["accessToken", "tokenType", "expiresIn"],
+                  properties: {
+                    accessToken: { type: "string" },
+                    tokenType: { type: "string", enum: ["Bearer"] },
+                    expiresIn,
+                  },
+                },
+                {
+                  title: "delivery: cookie",
+                  type: "object",
+                  required: ["email", "expiresIn"],
+                  properties: {
+                    email: { type: "string", example: "john@doe.com" },
+                    expiresIn,
+                  },
+                },
+              ],
+            }),
+            headers: {
+              "Set-Cookie": {
+                description: "Only when delivery is cookie",
+                schema: {
+                  type: "string",
+                  example:
+                    "access_token=eyJ...; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax",
+                },
+              },
+            },
+          },
+          "400": errorResponse(
+            "Malformed request: invalid JSON, missing field or wrong type",
+          ),
+          "401": errorResponse("Invalid credentials"),
+          "422": errorResponse(
+            "Well-formed body with a value that cannot be processed: unknown delivery",
+          ),
+        },
+      },
+    },
+    "/auth/logout": {
+      post: {
+        summary: "Delete the access_token cookie",
+        responses: {
+          "200": successResponse("The access_token cookie is deleted"),
+        },
+      },
+    },
+    "/auth/me": {
+      get: {
+        summary: "Get the authenticated user",
+        security: [{ bearerAuth: [] }, { cookieAuth: [] }],
+        responses: {
+          "200": successResponse("Authenticated user", authUser),
+          "401": errorResponse("Missing, invalid or expired token"),
+        },
+      },
+    },
   },
   components: {
+    securitySchemes: {
+      bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      cookieAuth: { type: "apiKey", in: "cookie", name: "access_token" },
+    },
     schemas: {
       PlanetReference: {
         type: "object",

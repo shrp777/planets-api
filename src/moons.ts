@@ -1,6 +1,7 @@
 import type { Moon } from "./types";
 
-// Only the main moons are listed: a planet's moonsCount is its real total
+// Seules les lunes principales sont listées : le moonsCount d'une planète
+// reste son total réel
 export const moons: Moon[] = [
   {
     id: "moon",

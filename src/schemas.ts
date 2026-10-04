@@ -9,6 +9,7 @@ import {
   MISSION_STATUSES,
   PLANET_TYPES,
   SORTABLE_FIELDS,
+  TOKEN_DELIVERIES,
 } from "./types";
 
 const planetIds = planets.map((p) => p.id);
@@ -20,7 +21,7 @@ const planetId = z
     error: `expected one of: ${planetIds.join(", ")}`,
   });
 
-// "field" sorts ascending, "-field" sorts descending
+// "field" trie par ordre croissant, "-field" par ordre décroissant
 const sort = <const T extends readonly string[]>(fields: T) =>
   z
     .string()
@@ -54,11 +55,18 @@ export const travelEstimationSchema = z.object({
   speedKmPerSecond: z.number().positive(),
 });
 
-// Validates the incoming data with a zod schema and answers in the API
-// envelope when it does not match:
-// - 400 when the request is malformed: invalid query parameter, or a body
-//   with a missing field or a field of the wrong type
-// - 422 when the body is well-formed but a value cannot be processed
+export const loginSchema = z.object({
+  email: z.string(),
+  password: z.string(),
+  delivery: z.enum(TOKEN_DELIVERIES).default("token"),
+});
+
+// Valide les données entrantes avec un schéma zod et répond dans l'enveloppe
+// de l'API quand elles ne correspondent pas :
+// - 400 quand la requête est mal formée : paramètre de requête invalide, ou
+//   corps avec un champ manquant ou du mauvais type
+// - 422 quand le corps est bien formé mais qu'une valeur ne peut pas être
+//   traitée
 export const validate = <
   Target extends keyof ValidationTargets,
   Schema extends z.ZodType,

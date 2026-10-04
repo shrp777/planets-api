@@ -8,6 +8,8 @@ API REST exposant les 8 planètes du système solaire.
 
 - **PORT** = port employé dans le conteneur Docker
 - **EXTERNAL_PORT** = port employé sur la machine hôte
+- **JWT_SECRET** = clé de signature des tokens JWT, obligatoire (ex : `openssl rand -base64 32`)
+- **CORS_ORIGIN** = origines autorisées à appeler `/auth/*` et `/missions` avec le cookie, séparées par des virgules (ex : `http://localhost:5173`)
 
 ## Lancement de l'API
 
@@ -28,7 +30,7 @@ bun run typecheck  # vérification des types
 
 ## Collection Bruno
 
-Le dossier `bruno/` contient une collection [Bruno](https://www.usebruno.com) couvrant tous les endpoints, cas d'erreur compris (`400`, `404`, `409`, `422`).
+Le dossier `bruno/` contient une collection [Bruno](https://www.usebruno.com) couvrant tous les endpoints, cas d'erreur compris (`400`, `401`, `404`, `409`, `422`).
 
 - Dans Bruno : _Open Collection_, puis sélectionner le dossier `bruno/`.
 - Choisir l'environnement `Local` (`http://localhost:3000`, pour `bun run dev`) ou `Docker` (`http://localhost:8079`, la valeur d'`EXTERNAL_PORT` dans `.env.example`).
@@ -50,13 +52,19 @@ bunx @usebruno/cli run -r --env Local
 | GET     | `/planets/{id}` | Détail d'une planète (ex : `/planets/earth`) |
 | GET     | `/planets/{id}/moons` | Lunes principales d'une planète (ex : `/planets/mars/moons`) |
 | GET     | `/planets/{id}/moons/{moonId}` | Détail d'une lune (ex : `/planets/jupiter/moons/europa`) |
-| GET     | `/missions` | Liste résumée des missions spatiales (filtrable, triable) |
-| GET     | `/missions/{id}` | Détail d'une mission (ex : `/missions/voyager-2`) |
+| GET     | `/missions` | 🔒 Liste résumée des missions spatiales (filtrable, triable) |
+| GET     | `/missions/{id}` | 🔒 Détail d'une mission (ex : `/missions/voyager-2`) |
 | POST    | `/travel-estimation` | Calcul d'une estimation de trajet entre deux planètes |
+| POST    | `/auth/login` | Authentification, le token JWT est renvoyé dans le corps ou déposé dans un cookie `httpOnly` (champ `delivery`) |
+| POST    | `/auth/logout` | Suppression du cookie d'authentification |
+| GET     | `/auth/me` | 🔒 Utilisateur authentifié |
+
+Les routes marquées 🔒 sont privées : elles exigent un token JWT valide (voir [Authentification](#authentification)).
 
 - Toutes les réponses sont au format JSON et comportent un champ `success`.
-- Les routes `/planets` et `/missions` renvoient les en-têtes `Cache-Control: public, max-age=3600` et `ETag` (une requête `If-None-Match` à jour reçoit un `304`).
-- CORS est ouvert à toutes les origines.
+- Les routes `/planets` renvoient les en-têtes `Cache-Control: public, max-age=3600` et `ETag` (une requête `If-None-Match` à jour reçoit un `304`).
+- Les routes `/missions`, privées, renvoient `Cache-Control: private, no-cache` et `ETag` : la réponse n'est jamais stockée par un cache partagé, et le navigateur la revalide à chaque fois, ce qui revérifie le token.
+- CORS est ouvert à toutes les origines, sauf pour les routes `/auth/*` et `/missions` : elles acceptent les cookies (`Access-Control-Allow-Credentials: true`) et ne sont donc ouvertes qu'aux origines listées dans `CORS_ORIGIN`.
 - Les données entrantes (paramètres de requête et corps JSON) sont validées par des schémas [zod](https://zod.dev) définis dans `src/schemas.ts` ; le champ `error` de la réponse liste tous les champs en cause (voir [Erreurs](#erreurs) pour les statuts `400`, `409` et `422`).
 
 ### GET /
@@ -71,7 +79,8 @@ bunx @usebruno/cli run -r --env Local
     "planets": ["/planets", "/planets/{id}"],
     "moons": ["/planets/{id}/moons", "/planets/{id}/moons/{moonId}"],
     "missions": ["/missions", "/missions/{id}"],
-    "travelEstimation": "POST /travel-estimation"
+    "travelEstimation": "POST /travel-estimation",
+    "auth": ["POST /auth/login", "POST /auth/logout", "/auth/me"]
   }
 }
 ```
@@ -183,6 +192,12 @@ Les deux identifiants sont insensibles à la casse. Une lune rattachée à une a
 
 ### GET /missions
 
+Route privée : sans token valide (en-tête `Authorization: Bearer` ou cookie `access_token`), la réponse est un `401`.
+
+```sh
+curl http://localhost:3000/missions -H "Authorization: Bearer <accessToken>"
+```
+
 Collection de premier niveau : une mission peut étudier plusieurs planètes (relation plusieurs-à-plusieurs), elle n'est donc pas imbriquée sous une planète. La relation s'exprime par le filtre `planet`.
 
 Paramètres de requête optionnels, combinables :
@@ -217,6 +232,8 @@ Exemple pour `/missions?planet=uranus` :
 ```
 
 ### GET /missions/{id}
+
+Route privée, comme `/missions`. Le token est vérifié avant l'identifiant : sans token, une mission inconnue renvoie un `401` et non un `404`.
 
 L'identifiant est insensible à la casse. `planets` liste les planètes étudiées dans l'ordre de visite, avec un lien vers chacune.
 
@@ -290,6 +307,105 @@ Trois statuts distinguent les erreurs sur le corps :
 
 Si un corps cumule un problème de forme et une valeur non traitable, c'est le `400` qui l'emporte. Une planète inconnue dans le corps donne un `422` et non un `404` : l'URL `/travel-estimation` existe, c'est la donnée envoyée qui est incorrecte.
 
+### Authentification
+
+L'API ne connaît qu'un seul utilisateur : `john@doe.com` / `azerty` (seule l'empreinte argon2id du mot de passe figure dans le code). Le token JWT est signé en HS256 avec `JWT_SECRET` et expire au bout d'une heure.
+
+#### POST /auth/login
+
+Corps de la requête (`Content-Type: application/json`) :
+
+| Champ      | Type   | Description                                                    |
+| ---------- | ------ | -------------------------------------------------------------- |
+| `email`    | string | Obligatoire                                                    |
+| `password` | string | Obligatoire                                                    |
+| `delivery` | string | Optionnel : `token` (par défaut) ou `cookie`                   |
+
+Le champ `delivery` choisit la façon dont le token est remis au client :
+
+| `delivery` | Le token est…                        | Pour…                                  |
+| ---------- | ------------------------------------ | -------------------------------------- |
+| `token`    | renvoyé dans le corps de la réponse  | un client d'API (script, mobile, back) |
+| `cookie`   | déposé dans le cookie `access_token` | une application front end (React…)     |
+
+- Un champ manquant ou du mauvais type renvoie un `400`, une valeur de `delivery` inconnue un `422`, des identifiants incorrects un `401` (`Invalid credentials`, sans préciser lequel des deux est faux).
+- Les réponses des routes `/auth/*` portent l'en-tête `Cache-Control: no-store`.
+
+**Avec `delivery: "token"`** (ou sans le champ) :
+
+```sh
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "john@doe.com", "password": "azerty"}'
+```
+
+```json
+{
+  "success": true,
+  "data": { "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...", "tokenType": "Bearer", "expiresIn": 3600 },
+  "message": "Authentication successful"
+}
+```
+
+Le client renvoie ensuite le token dans l'en-tête `Authorization` :
+
+```sh
+curl http://localhost:3000/auth/me -H "Authorization: Bearer <accessToken>"
+```
+
+**Avec `delivery: "cookie"`**, la réponse dépose le cookie et ne contient pas le token :
+
+```
+Set-Cookie: access_token=eyJ...; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax
+```
+
+```json
+{
+  "success": true,
+  "data": { "email": "john@doe.com", "expiresIn": 3600 },
+  "message": "Authentication successful"
+}
+```
+
+- `HttpOnly` : le cookie est illisible en JavaScript, un script injecté (XSS) ne peut pas voler le token. C'est pour cette raison que le token est absent du corps.
+- `SameSite=Lax` : le navigateur ne joint pas le cookie aux requêtes `POST` venant d'un autre site (CSRF).
+- `Secure` est ajouté lorsque `NODE_ENV=production` (cookie envoyé uniquement en HTTPS).
+
+Côté front end, il faut demander au navigateur de joindre le cookie, et l'origine du front doit figurer dans `CORS_ORIGIN` :
+
+```js
+await fetch("http://localhost:3000/auth/login", {
+  method: "POST",
+  credentials: "include",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email: "john@doe.com", password: "azerty", delivery: "cookie" }),
+});
+
+const res = await fetch("http://localhost:3000/auth/me", { credentials: "include" });
+```
+
+#### POST /auth/logout
+
+Supprime le cookie (un cookie `httpOnly` ne peut pas être supprimé en JavaScript). Avec un token transmis par en-tête, il suffit que le client l'oublie.
+
+```json
+{ "success": true, "message": "Logged out" }
+```
+
+#### GET /auth/me
+
+Route protégée : le token est lu dans l'en-tête `Authorization: Bearer`, à défaut dans le cookie `access_token`. Un token absent, invalide ou expiré renvoie un `401` avec l'en-tête `WWW-Authenticate: Bearer`.
+
+```json
+{
+  "success": true,
+  "data": { "email": "john@doe.com" },
+  "message": "Authenticated user"
+}
+```
+
+Le middleware `authenticate` de `src/auth.ts` protège de la même façon toutes les routes `/missions` (`app.use("/missions/*", authenticate)`), et peut protéger n'importe quelle autre route.
+
 ### Erreurs
 
 | Statut | Cas                            | Réponse                                                   |
@@ -297,6 +413,8 @@ Si un corps cumule un problème de forme et une valeur non traitable, c'est le `
 | 400    | Paramètre de requête invalide, ou corps mal formé | `{ "success": false, "error": "Invalid planet: expected one of: ..." }` |
 | 409    | Corps dont les valeurs sont en conflit | `{ "success": false, "error": "Conflict between from and to: expected two different planets" }` |
 | 422    | Corps bien formé avec une valeur non traitable | `{ "success": false, "error": "Invalid speedKmPerSecond: Too small: expected number to be >0" }` |
+| 401    | Identifiants incorrects | `{ "success": false, "error": "Invalid credentials" }` |
+| 401    | Token absent, invalide ou expiré | `{ "success": false, "error": "Missing, invalid or expired token" }` |
 | 404    | Planète inconnue               | `{ "success": false, "error": "Planet not found" }`       |
 | 404    | Lune inconnue pour cette planète | `{ "success": false, "error": "Moon not found" }`       |
 | 404    | Mission inconnue               | `{ "success": false, "error": "Mission not found" }`      |

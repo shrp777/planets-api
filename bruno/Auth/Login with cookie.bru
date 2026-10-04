@@ -1,0 +1,30 @@
+meta {
+  name: Login with cookie
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "john@doe.com",
+    "password": "azerty",
+    "delivery": "cookie"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.email: eq john@doe.com
+  res.headers['set-cookie'][0]: contains HttpOnly
+}
+
+docs {
+  For a browser front end, with `delivery: cookie`: the JWT is set in the `access_token` httpOnly cookie and is left out of the body.
+}

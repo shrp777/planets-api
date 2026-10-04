@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { app } from "./app";
+import { app } from "../src/app";
+import { createToken } from "../src/auth";
+
+process.env.JWT_SECRET = "test-secret";
+process.env.CORS_ORIGIN = "http://localhost:5173";
 
 const ids = (body: { data: { id: string }[] }) => body.data.map((p) => p.id);
 
@@ -37,6 +41,9 @@ describe("GET /openapi.json", () => {
       "/missions",
       "/missions/{id}",
       "/travel-estimation",
+      "/auth/login",
+      "/auth/logout",
+      "/auth/me",
     ]);
   });
 });
@@ -217,9 +224,41 @@ describe("GET /planets/:id/moons/:moonId", () => {
   });
 });
 
+const authRequest = async (path: string) =>
+  app.request(path, {
+    headers: { Authorization: `Bearer ${await createToken("john@doe.com")}` },
+  });
+
 describe("GET /missions", () => {
+  test("requires a token on every missions route", async () => {
+    for (const path of ["/missions", "/missions/juno", "/missions/apollo-11"]) {
+      const res = await app.request(path);
+      expect(res.status).toBe(401);
+      expect(res.headers.get("WWW-Authenticate")).toBe("Bearer");
+      expect(res.headers.get("Cache-Control")).toBeNull();
+    }
+  });
+
+  test("accepts the token as a cookie", async () => {
+    const res = await app.request("/missions", {
+      headers: { Cookie: `access_token=${await createToken("john@doe.com")}` },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test("allows credentials only for the configured origin", async () => {
+    const res = await app.request("/missions", {
+      headers: { Origin: "http://localhost:5173" },
+    });
+    expect(res.headers.get("Access-Control-Allow-Credentials")).toBe("true");
+    const other = await app.request("/missions", {
+      headers: { Origin: "https://example.com" },
+    });
+    expect(other.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+
   test("returns the missions as summaries with a self link", async () => {
-    const res = await app.request("/missions");
+    const res = await authRequest("/missions");
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
@@ -235,7 +274,7 @@ describe("GET /missions", () => {
   });
 
   test("filters by planet", async () => {
-    const res = await app.request("/missions?planet=saturn");
+    const res = await authRequest("/missions?planet=saturn");
     expect(ids(await res.json())).toEqual([
       "pioneer-11",
       "voyager-2",
@@ -246,19 +285,19 @@ describe("GET /missions", () => {
 
   test("a mission appears under each planet it studied", async () => {
     for (const planet of ["jupiter", "saturn", "uranus", "neptune"]) {
-      const res = await app.request(`/missions?planet=${planet}`);
+      const res = await authRequest(`/missions?planet=${planet}`);
       expect(ids(await res.json())).toContain("voyager-2");
     }
   });
 
   test("returns an empty list for a planet without missions", async () => {
-    const res = await app.request("/missions?planet=earth");
+    const res = await authRequest("/missions?planet=earth");
     expect(res.status).toBe(200);
     expect((await res.json()).data).toEqual([]);
   });
 
   test("combines filters and sort", async () => {
-    const res = await app.request(
+    const res = await authRequest(
       "/missions?planet=mars&status=active&sort=-launchDate",
     );
     expect(ids(await res.json())).toEqual([
@@ -270,7 +309,7 @@ describe("GET /missions", () => {
   });
 
   test("filters by agency", async () => {
-    const res = await app.request("/missions?agency=ESA");
+    const res = await authRequest("/missions?agency=ESA");
     expect(ids(await res.json())).toEqual([
       "mars-express",
       "venus-express",
@@ -281,23 +320,23 @@ describe("GET /missions", () => {
   test.each(["planet=pluto", "agency=SpaceX", "status=lost", "sort=agency"])(
     "rejects ?%s with a 400",
     async (query) => {
-      const res = await app.request(`/missions?${query}`);
+      const res = await authRequest(`/missions?${query}`);
       expect(res.status).toBe(400);
       expect((await res.json()).success).toBe(false);
     },
   );
 
   test("the missions link of every planet resolves", async () => {
-    for (const planet of (await (await app.request("/planets")).json()).data) {
-      const detail = await (await app.request(planet.links.self)).json();
-      expect((await app.request(detail.data.links.missions)).status).toBe(200);
+    for (const planet of (await (await authRequest("/planets")).json()).data) {
+      const detail = await (await authRequest(planet.links.self)).json();
+      expect((await authRequest(detail.data.links.missions)).status).toBe(200);
     }
   });
 });
 
 describe("GET /missions/:id", () => {
   test("returns the mission details with its planets and their links", async () => {
-    const res = await app.request("/missions/voyager-2");
+    const res = await authRequest("/missions/voyager-2");
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.name).toBe("Voyager 2");
@@ -312,7 +351,7 @@ describe("GET /missions/:id", () => {
   });
 
   test("lists the planets in the order they were visited", async () => {
-    const res = await app.request("/missions/mariner-10");
+    const res = await authRequest("/missions/mariner-10");
     const planets = (await res.json()).data.planets;
     expect(planets.map((p: { id: string }) => p.id)).toEqual([
       "venus",
@@ -321,25 +360,25 @@ describe("GET /missions/:id", () => {
   });
 
   test("every mission resolves and only references known planets", async () => {
-    const list = await (await app.request("/missions")).json();
+    const list = await (await authRequest("/missions")).json();
     for (const summary of list.data) {
-      const res = await app.request(summary.links.self);
+      const res = await authRequest(summary.links.self);
       expect(res.status).toBe(200);
       const mission = (await res.json()).data;
       expect(mission.planets.length).toBeGreaterThan(0);
       for (const planet of mission.planets) {
-        expect((await app.request(planet.links.self)).status).toBe(200);
+        expect((await authRequest(planet.links.self)).status).toBe(200);
       }
     }
   });
 
   test("matches the id case-insensitively", async () => {
-    const res = await app.request("/missions/Voyager-2");
+    const res = await authRequest("/missions/Voyager-2");
     expect(res.status).toBe(200);
   });
 
   test("returns a JSON 404 for an unknown mission", async () => {
-    const res = await app.request("/missions/apollo-11");
+    const res = await authRequest("/missions/apollo-11");
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({
       success: false,
@@ -347,9 +386,9 @@ describe("GET /missions/:id", () => {
     });
   });
 
-  test("is cached like the planet routes", async () => {
-    const res = await app.request("/missions/juno");
-    expect(res.headers.get("Cache-Control")).toBe("public, max-age=3600");
+  test("is kept out of shared caches and revalidated", async () => {
+    const res = await authRequest("/missions/juno");
+    expect(res.headers.get("Cache-Control")).toBe("private, no-cache");
     expect(res.headers.get("ETag")).toBeTruthy();
   });
 });
@@ -473,6 +512,127 @@ describe("POST /travel-estimation", () => {
     });
     expect(res.status).toBe(204);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+  });
+});
+
+const credentials = { email: "john@doe.com", password: "azerty" };
+
+const login = (body: unknown) =>
+  app.request("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+describe("POST /auth/login", () => {
+  test("returns a JWT in the body by default, without cookie", async () => {
+    for (const body of [credentials, { ...credentials, delivery: "token" }]) {
+      const res = await login(body);
+      expect(res.status).toBe(200);
+      const { data } = await res.json();
+      expect(data.tokenType).toBe("Bearer");
+      expect(data.expiresIn).toBe(3600);
+      expect(data.accessToken.split(".")).toHaveLength(3);
+      expect(res.headers.get("Set-Cookie")).toBeNull();
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+    }
+  });
+
+  test("with delivery cookie, sets the JWT in an httpOnly cookie and keeps it out of the body", async () => {
+    const res = await login({ ...credentials, delivery: "cookie" });
+    expect(res.status).toBe(200);
+    const cookie = res.headers.get("Set-Cookie")!;
+    expect(cookie).toStartWith("access_token=");
+    expect(cookie).toContain("HttpOnly");
+    expect(cookie).toContain("SameSite=Lax");
+    expect(cookie).toContain("Max-Age=3600");
+    const body = await res.json();
+    expect(body.data).toEqual({ email: "john@doe.com", expiresIn: 3600 });
+  });
+
+  test("rejects a wrong password or an unknown email with a 401, without cookie", async () => {
+    for (const body of [
+      { ...credentials, password: "qwerty" },
+      { ...credentials, email: "jane@doe.com" },
+      { ...credentials, password: "qwerty", delivery: "cookie" },
+    ]) {
+      const res = await login(body);
+      expect(res.status).toBe(401);
+      expect(res.headers.get("Set-Cookie")).toBeNull();
+      expect(await res.json()).toEqual({
+        success: false,
+        error: "Invalid credentials",
+      });
+    }
+  });
+
+  test("rejects a malformed body with a 400", async () => {
+    const res = await login({ email: "john@doe.com" });
+    expect(res.status).toBe(400);
+  });
+
+  test("rejects an unknown delivery with a 422", async () => {
+    const res = await login({ ...credentials, delivery: "header" });
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toContain("Invalid delivery");
+  });
+});
+
+describe("POST /auth/logout", () => {
+  test("deletes the cookie", async () => {
+    const res = await app.request("/auth/logout", { method: "POST" });
+    expect(res.status).toBe(200);
+    const cookie = res.headers.get("Set-Cookie")!;
+    expect(cookie).toStartWith("access_token=;");
+    expect(cookie).toContain("Max-Age=0");
+  });
+});
+
+describe("GET /auth/me", () => {
+  test("accepts the token as a Bearer header", async () => {
+    const { accessToken } = (await (await login(credentials)).json()).data;
+    const res = await app.request("/auth/me", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).data).toEqual({ email: "john@doe.com" });
+  });
+
+  test("accepts the token as a cookie", async () => {
+    const loggedIn = await login({ ...credentials, delivery: "cookie" });
+    const cookie = loggedIn.headers.get("Set-Cookie")!.split(";")[0]!;
+    const res = await app.request("/auth/me", { headers: { Cookie: cookie } });
+    expect(res.status).toBe(200);
+    expect((await res.json()).data).toEqual({ email: "john@doe.com" });
+  });
+
+  test("rejects a missing or tampered token with a 401", async () => {
+    const missing = await app.request("/auth/me");
+    expect(missing.status).toBe(401);
+    expect(missing.headers.get("WWW-Authenticate")).toBe("Bearer");
+
+    const { accessToken } = (await (await login(credentials)).json()).data;
+    const tampered = await app.request("/auth/me", {
+      headers: { Authorization: `Bearer ${accessToken}x` },
+    });
+    expect(tampered.status).toBe(401);
+  });
+
+  test("allows credentials only for the configured origin", async () => {
+    const allowed = await app.request("/auth/me", {
+      headers: { Origin: "http://localhost:5173" },
+    });
+    expect(allowed.headers.get("Access-Control-Allow-Origin")).toBe(
+      "http://localhost:5173",
+    );
+    expect(allowed.headers.get("Access-Control-Allow-Credentials")).toBe(
+      "true",
+    );
+
+    const other = await app.request("/auth/me", {
+      headers: { Origin: "https://example.com" },
+    });
+    expect(other.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
 });
 

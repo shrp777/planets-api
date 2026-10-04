@@ -108,3 +108,7 @@ export type TravelEstimate = {
 export const MISSION_SORTABLE_FIELDS = ["launchDate", "name"] as const;
 
 export type MissionSortableField = (typeof MISSION_SORTABLE_FIELDS)[number];
+
+export const TOKEN_DELIVERIES = ["token", "cookie"] as const;
+
+export type TokenDelivery = (typeof TOKEN_DELIVERIES)[number];

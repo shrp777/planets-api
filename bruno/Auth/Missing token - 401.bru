@@ -1,0 +1,20 @@
+meta {
+  name: Missing token - 401
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/auth/me
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 401
+  res.body.success: eq false
+}
+
+docs {
+  Runs after `Logout`: the cookie is gone and no `Authorization` header is sent.
+}

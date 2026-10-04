@@ -1,0 +1,21 @@
+meta {
+  name: Logout
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/auth/logout
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.headers['set-cookie'][0]: contains Max-Age=0
+}
+
+docs {
+  JavaScript cannot delete an httpOnly cookie: the server does it.
+}

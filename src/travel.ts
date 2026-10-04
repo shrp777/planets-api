@@ -9,8 +9,8 @@ const round = (value: number, decimals: number) => {
   return Math.round(value * factor) / factor;
 };
 
-// Simplified model: straight line between the two orbits at their closest,
-// using mean distances from the Sun, at constant speed
+// Modèle simplifié : ligne droite entre les deux orbites au plus proche, à
+// partir des distances moyennes au Soleil, à vitesse constante
 export const estimateTravel = (
   from: Planet,
   to: Planet,
