@@ -5,6 +5,7 @@ import {
   PLANET_TYPES,
   SORTABLE_FIELDS,
   TOKEN_DELIVERIES,
+  USER_ROLES,
 } from "./types";
 
 const errorResponse = (description: string) => ({
@@ -39,10 +40,16 @@ const successResponse = (description: string, data?: object) => ({
   },
 });
 
+const authUserProperties = {
+  id: { type: "string", format: "uuid", example: "5f0f4aca-7368-4b38-b2fe-a2ed7925441b" },
+  email: { type: "string", example: "john@doe.com" },
+  role: { type: "string", enum: USER_ROLES },
+};
+
 const authUser = {
   type: "object",
-  required: ["email"],
-  properties: { email: { type: "string", example: "john@doe.com" } },
+  required: ["id", "email", "role"],
+  properties: authUserProperties,
 };
 
 const links = {
@@ -434,7 +441,7 @@ export const openApiDocument = {
       post: {
         summary: "Authenticate and get a JWT",
         description:
-          'The delivery field selects how the token is returned. "token" (default), for API clients: the token is in the body and is then sent in the Authorization header (Bearer). "cookie", for a browser front end: the token is set in the access_token cookie (HttpOnly, SameSite=Lax) and is not present in the body.',
+          'The token carries the user id (UUID) in the sub claim and the role in the role claim; it carries no email. The delivery field selects how the token is returned. "token" (default), for API clients: the token is in the body and is then sent in the Authorization header (Bearer). "cookie", for a browser front end: the token is set in the access_token cookie (HttpOnly, SameSite=Lax) and is not present in the body.',
         requestBody: {
           required: true,
           content: {
@@ -472,9 +479,9 @@ export const openApiDocument = {
                 {
                   title: "delivery: cookie",
                   type: "object",
-                  required: ["email", "expiresIn"],
+                  required: ["id", "email", "role", "expiresIn"],
                   properties: {
-                    email: { type: "string", example: "john@doe.com" },
+                    ...authUserProperties,
                     expiresIn,
                   },
                 },
@@ -516,6 +523,7 @@ export const openApiDocument = {
         responses: {
           "200": successResponse("Authenticated user", authUser),
           "401": errorResponse("Missing, invalid or expired token"),
+          "404": errorResponse("The user of the token no longer exists"),
         },
       },
     },

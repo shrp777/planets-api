@@ -9,6 +9,7 @@ import {
   checkCredentials,
   clearAuthCookie,
   createToken,
+  findUserById,
   setAuthCookie,
   TOKEN_TTL_SECONDS,
 } from "./auth";
@@ -299,17 +300,18 @@ app.use("/auth/*", async (c, next) => {
 //   ne puisse jamais le lire
 app.post("/auth/login", validate("json", loginSchema), async (c) => {
   const { email, password, delivery } = c.req.valid("json");
-  if (!(await checkCredentials(email, password))) {
+  const user = await checkCredentials(email, password);
+  if (!user) {
     return c.json({ success: false, error: "Invalid credentials" }, 401);
   }
-  const token = await createToken(email);
+  const token = await createToken(user);
 
   if (delivery === "cookie") {
     setAuthCookie(c, token);
     return c.json(
       {
         success: true,
-        data: { email: email.toLowerCase(), expiresIn: TOKEN_TTL_SECONDS },
+        data: { ...user, expiresIn: TOKEN_TTL_SECONDS },
         message: "Authentication successful",
       },
       200,
@@ -338,10 +340,15 @@ app.post("/auth/logout", (c) => {
 });
 
 app.get("/auth/me", authenticate, (c) => {
+  // L'email n'est pas dans le token : il est relu à partir de l'id
+  const user = findUserById(c.get("user").id);
+  if (!user) {
+    return c.json({ success: false, error: "User not found" }, 404);
+  }
   return c.json(
     {
       success: true,
-      data: c.get("user"),
+      data: user,
       message: "Authenticated user",
     },
     200,

@@ -112,3 +112,7 @@ export type MissionSortableField = (typeof MISSION_SORTABLE_FIELDS)[number];
 export const TOKEN_DELIVERIES = ["token", "cookie"] as const;
 
 export type TokenDelivery = (typeof TOKEN_DELIVERIES)[number];
+
+export const USER_ROLES = ["astronaut"] as const;
+
+export type UserRole = (typeof USER_ROLES)[number];

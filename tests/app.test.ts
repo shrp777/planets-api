@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { decode } from "hono/jwt";
 
 import { app } from "../src/app";
 import { createToken } from "../src/auth";
+
+const user = {
+  id: "5f0f4aca-7368-4b38-b2fe-a2ed7925441b",
+  email: "john@doe.com",
+  role: "astronaut",
+} as const;
 
 process.env.JWT_SECRET = "test-secret";
 process.env.CORS_ORIGIN = "http://localhost:5173";
@@ -226,7 +233,7 @@ describe("GET /planets/:id/moons/:moonId", () => {
 
 const authRequest = async (path: string) =>
   app.request(path, {
-    headers: { Authorization: `Bearer ${await createToken("john@doe.com")}` },
+    headers: { Authorization: `Bearer ${await createToken(user)}` },
   });
 
 describe("GET /missions", () => {
@@ -241,7 +248,7 @@ describe("GET /missions", () => {
 
   test("accepts the token as a cookie", async () => {
     const res = await app.request("/missions", {
-      headers: { Cookie: `access_token=${await createToken("john@doe.com")}` },
+      headers: { Cookie: `access_token=${await createToken(user)}` },
     });
     expect(res.status).toBe(200);
   });
@@ -533,6 +540,13 @@ describe("POST /auth/login", () => {
       expect(data.tokenType).toBe("Bearer");
       expect(data.expiresIn).toBe(3600);
       expect(data.accessToken.split(".")).toHaveLength(3);
+      const payload = decode(data.accessToken).payload;
+      expect(payload.sub).toBe(user.id);
+      expect(payload.role).toBe("astronaut");
+      // No directly identifying data in a payload that anyone can read
+      expect(payload.email).toBeUndefined();
+      expect(Object.keys(payload).sort()).toEqual(["exp", "iat", "role", "sub"]);
+      expect(payload.exp! - payload.iat!).toBe(3600);
       expect(res.headers.get("Set-Cookie")).toBeNull();
       expect(res.headers.get("Cache-Control")).toBe("no-store");
     }
@@ -547,7 +561,7 @@ describe("POST /auth/login", () => {
     expect(cookie).toContain("SameSite=Lax");
     expect(cookie).toContain("Max-Age=3600");
     const body = await res.json();
-    expect(body.data).toEqual({ email: "john@doe.com", expiresIn: 3600 });
+    expect(body.data).toEqual({ ...user, expiresIn: 3600 });
   });
 
   test("rejects a wrong password or an unknown email with a 401, without cookie", async () => {
@@ -595,7 +609,7 @@ describe("GET /auth/me", () => {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     expect(res.status).toBe(200);
-    expect((await res.json()).data).toEqual({ email: "john@doe.com" });
+    expect((await res.json()).data).toEqual(user);
   });
 
   test("accepts the token as a cookie", async () => {
@@ -603,7 +617,15 @@ describe("GET /auth/me", () => {
     const cookie = loggedIn.headers.get("Set-Cookie")!.split(";")[0]!;
     const res = await app.request("/auth/me", { headers: { Cookie: cookie } });
     expect(res.status).toBe(200);
-    expect((await res.json()).data).toEqual({ email: "john@doe.com" });
+    expect((await res.json()).data).toEqual(user);
+  });
+
+  test("answers 404 when the user of the token no longer exists", async () => {
+    const token = await createToken({ id: crypto.randomUUID(), role: "astronaut" });
+    const res = await app.request("/auth/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(404);
   });
 
   test("rejects a missing or tampered token with a 401", async () => {

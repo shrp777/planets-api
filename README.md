@@ -309,7 +309,18 @@ Si un corps cumule un problème de forme et une valeur non traitable, c'est le `
 
 ### Authentification
 
-L'API ne connaît qu'un seul utilisateur : `john@doe.com` / `azerty` (seule l'empreinte argon2id du mot de passe figure dans le code). Le token JWT est signé en HS256 avec `JWT_SECRET` et expire au bout d'une heure.
+L'API ne connaît qu'un seul utilisateur : `john@doe.com` / `azerty` (seule l'empreinte argon2id du mot de passe figure dans le code). Le token JWT est signé en HS256 avec `JWT_SECRET` et expire au bout d'une heure. Son payload identifie l'utilisateur par son id (un UUID) dans la revendication standard `sub`, accompagné de son rôle (`astronaut`) :
+
+```json
+{
+  "sub": "5f0f4aca-7368-4b38-b2fe-a2ed7925441b",
+  "role": "astronaut",
+  "iat": 1791100800,
+  "exp": 1791104400
+}
+```
+
+Le payload ne contient pas l'email : un JWT est signé mais pas chiffré, son contenu est lisible par quiconque détient le token. Conformément au principe de minimisation du RGPD, il ne transporte donc que l'identifiant, pseudonyme, et le rôle, nécessaire à l'autorisation ; l'email est relu côté serveur à partir de l'id lorsqu'il est utile (`GET /auth/me`).
 
 #### POST /auth/login
 
@@ -362,7 +373,7 @@ Set-Cookie: access_token=eyJ...; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax
 ```json
 {
   "success": true,
-  "data": { "email": "john@doe.com", "expiresIn": 3600 },
+  "data": { "id": "5f0f4aca-7368-4b38-b2fe-a2ed7925441b", "email": "john@doe.com", "role": "astronaut", "expiresIn": 3600 },
   "message": "Authentication successful"
 }
 ```
@@ -399,7 +410,7 @@ Route protégée : le token est lu dans l'en-tête `Authorization: Bearer`, à d
 ```json
 {
   "success": true,
-  "data": { "email": "john@doe.com" },
+  "data": { "id": "5f0f4aca-7368-4b38-b2fe-a2ed7925441b", "email": "john@doe.com", "role": "astronaut" },
   "message": "Authenticated user"
 }
 ```
@@ -415,6 +426,7 @@ Le middleware `authenticate` de `src/auth.ts` protège de la même façon toutes
 | 422    | Corps bien formé avec une valeur non traitable | `{ "success": false, "error": "Invalid speedKmPerSecond: Too small: expected number to be >0" }` |
 | 401    | Identifiants incorrects | `{ "success": false, "error": "Invalid credentials" }` |
 | 401    | Token absent, invalide ou expiré | `{ "success": false, "error": "Missing, invalid or expired token" }` |
+| 404    | Utilisateur du token inexistant | `{ "success": false, "error": "User not found" }` |
 | 404    | Planète inconnue               | `{ "success": false, "error": "Planet not found" }`       |
 | 404    | Lune inconnue pour cette planète | `{ "success": false, "error": "Moon not found" }`       |
 | 404    | Mission inconnue               | `{ "success": false, "error": "Mission not found" }`      |
