@@ -105,7 +105,7 @@ export type TravelEstimate = {
   durationDays: number;
 };
 
-export const MISSION_SORTABLE_FIELDS = ["launchDate", "name"] as const;
+export const MISSION_SORTABLE_FIELDS = ["launchDate", "name", "status"] as const;
 
 export type MissionSortableField = (typeof MISSION_SORTABLE_FIELDS)[number];
 

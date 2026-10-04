@@ -216,7 +216,7 @@ Paramètres de requête optionnels, combinables :
 | `agency`  | `NASA`, `ESA`, `JAXA`, `ISRO`, `CNSA` | `?agency=ESA`       |
 | `status`  | `active`, `completed`                 | `?status=active`    |
 | `participating` | `true`, `false`                 | `?participating=true` |
-| `sort`    | `launchDate`, `name`                  | `?sort=-launchDate` |
+| `sort`    | `launchDate`, `name`, `status`        | `?sort=-launchDate` |
 
 - `agency` est l'agence principale de la mission.
 - `participating` filtre selon la participation de l'utilisateur connecté : `true` ne garde que ses missions, `false` que les autres (voir ci-dessous).

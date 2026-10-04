@@ -326,6 +326,38 @@ describe("GET /missions", () => {
     expect(res.status).toBe(400);
   });
 
+  test("filters by status", async () => {
+    const active = await (await authRequest("/missions?status=active")).json();
+    expect(active.data).toHaveLength(8);
+    expect(active.data.every((m: { status: string }) => m.status === "active")).toBe(true);
+
+    const completed = await authRequest("/missions?status=completed");
+    expect(ids(await completed.json())).toHaveLength(10);
+  });
+
+  test("sorts by launch date, ascending and descending", async () => {
+    const dates = async (query: string) => {
+      const body = await (await authRequest(`/missions?${query}`)).json();
+      return body.data.map((m: { launchDate: string }) => m.launchDate);
+    };
+    const asc = await dates("sort=launchDate");
+    expect(asc).toHaveLength(18);
+    expect(asc).toEqual([...asc].sort());
+    expect(asc[0]).toBe("1973-04-06");
+    expect(await dates("sort=-launchDate")).toEqual([...asc].reverse());
+  });
+
+  test("sorts by status, ascending and descending", async () => {
+    const statuses = async (query: string) => {
+      const body = await (await authRequest(`/missions?${query}`)).json();
+      return body.data.map((m: { status: string }) => m.status);
+    };
+    const active = Array(8).fill("active");
+    const completed = Array(10).fill("completed");
+    expect(await statuses("sort=status")).toEqual([...active, ...completed]);
+    expect(await statuses("sort=-status")).toEqual([...completed, ...active]);
+  });
+
   test("returns an empty list for a planet without missions", async () => {
     const res = await authRequest("/missions?planet=earth");
     expect(res.status).toBe(200);

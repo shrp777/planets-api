@@ -1,0 +1,27 @@
+meta {
+  name: Sort by status
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/missions?sort=status
+  body: none
+  auth: inherit
+}
+
+params:query {
+  sort: status
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.length: eq 18
+  res.body.data[0].status: eq active
+  res.body.data[17].status: eq completed
+}
+
+docs {
+  Active missions first; `sort=-status` puts the completed ones first. Use `status=active` to keep only one status.
+}
