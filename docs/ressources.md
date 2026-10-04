@@ -12,7 +12,7 @@ Source : [schemas/modele-domaine.puml](schemas/modele-domaine.puml)
 | --- | --- | --- | --- |
 | Planète | 8 | public | `/planets`, `/planets/{id}` |
 | Lune | 22 | public | `/planets/{id}/moons`, `/planets/{id}/moons/{moonId}` |
-| Mission | 18 | privé | `/missions`, `/missions/{id}` |
+| Mission | 18 au démarrage | privé | `/missions`, `POST /missions`, `/missions/{id}`, `PATCH /missions/{id}` |
 | Utilisateur | 1 | privé | `/auth/me` |
 | Estimation de trajet | calculée | public | `POST /travel-estimation` |
 
@@ -81,14 +81,40 @@ Une mission peut étudier plusieurs planètes, et une planète est étudiée par
 | `id` | string | Identifiant (`voyager-2`) |
 | `name` | string | Nom |
 | `agency` | string | Agence principale : `NASA`, `ESA`, `JAXA`, `ISRO` ou `CNSA` |
-| `launchDate` | string | Date de lancement, au format `AAAA-MM-JJ` |
-| `status` | string | `active` ou `completed` |
+| `launchDate` | string ou `null` | Date de lancement, au format `AAAA-MM-JJ` ; `null` tant que la mission est `planned` |
+| `status` | string | `planned`, `active` ou `completed` |
 | `planets` | tableau | Planètes étudiées, dans l'ordre de visite |
 | `description` | string | Description |
 
 - Dans les données, `planets` est une liste d'identifiants. Dans le détail d'une mission, chaque planète est renvoyée sous forme de **référence** : `id`, `name` et lien `self`, ce qui évite au client une requête par planète pour afficher leurs noms.
 - La relation se parcourt dans les deux sens : le détail d'une planète porte le lien `/missions?planet={id}`, le détail d'une mission liste ses planètes.
 - Les routes des missions sont **privées** (voir [Authentification](authentification.md)).
+
+### Création
+
+La mission est la seule ressource que l'API permet de créer et de modifier. `POST /missions` ajoute une mission à la collection.
+
+- Le client envoie `name`, `agency`, `planets` et `description`. Il ne choisit ni l'identifiant, dérivé du nom (`Europa Clipper` devient `europa-clipper`), ni le statut, toujours `planned`, ni la date de lancement, encore inconnue (`null`).
+- La réponse est un `201` : elle porte l'URL de la nouvelle mission dans l'en-tête `Location` et sa représentation complète dans le corps.
+- Si l'identifiant est déjà pris, la réponse est un `409` : la requête est valide, mais en conflit avec une ressource existante.
+
+### Cycle de vie
+
+`PATCH /missions/{id}` met à jour le statut, avec le corps `{ "status": "active" }`. Le verbe est `PATCH` et non `PUT` parce que la mise à jour est partielle : le client n'envoie que le champ modifié, pas la mission entière.
+
+| Statut actuel | Statut accepté |
+| --- | --- |
+| `planned` | `active` |
+| `active` | `completed` |
+| `completed` | aucun |
+
+La date de lancement dépend du statut : elle n'est renseignée que lorsque la mission passe à `active`. Le serveur y inscrit alors la date du jour, le client ne l'envoie pas. Elle est conservée quand la mission passe à `completed`.
+
+Le cycle est à sens unique. Un statut qui n'est pas le suivant renvoie un `409` : la valeur est valide, mais en conflit avec l'état actuel de la mission. Un statut inconnu renvoie un `422`.
+
+### Persistance simulée
+
+L'API n'a pas de base de données. La liste des missions (`src/missions.ts`) en tient lieu : une mission créée y est ajoutée, un changement de statut y est appliqué. Les autres routes voient donc aussitôt le résultat (liste, filtres, détail), mais tout est perdu au redémarrage du serveur, qui repart des 18 missions d'origine.
 
 ## Utilisateur et participation
 

@@ -11,6 +11,7 @@ import {
   SORTABLE_FIELDS,
   TOKEN_DELIVERIES,
 } from "./types";
+import { slugify } from "./utils";
 
 const planetIds = planets.map((p) => p.id);
 
@@ -51,6 +52,36 @@ export const missionsQuerySchema = z.object({
     .transform((value) => value === "true")
     .optional(),
   sort: sort(MISSION_SORTABLE_FIELDS).optional(),
+});
+
+// Dans un corps JSON, une valeur absente ou qui n'est pas une chaîne est un
+// problème de forme (400), une chaîne hors de la liste une valeur non
+// traitable (422) : z.enum seul ne distingue pas les deux cas
+const oneOf = <const T extends readonly [string, ...string[]]>(values: T) =>
+  z.string().pipe(z.enum(values));
+
+// Ni le statut ni la date de lancement ne sont acceptés à la création : une
+// mission est toujours créée avec le statut planned, et n'est lancée que
+// lorsqu'elle devient active. L'identifiant est dérivé du nom
+export const missionCreationSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .refine((name) => slugify(name) !== "", {
+      error: "expected at least one letter or digit",
+    }),
+  agency: oneOf(AGENCIES),
+  planets: z
+    .array(planetId)
+    .min(1)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      error: "expected distinct planets",
+    }),
+  description: z.string().trim().min(1),
+});
+
+export const missionStatusSchema = z.object({
+  status: oneOf(MISSION_STATUSES),
 });
 
 export const travelEstimationSchema = z.object({

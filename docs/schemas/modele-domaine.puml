@@ -35,7 +35,7 @@ class Mission {
   id : string
   name : string
   agency : Agency
-  launchDate : string
+  launchDate : string | null
   status : MissionStatus
   planets : string[]
   description : string
@@ -76,6 +76,7 @@ enum Agency {
 }
 
 enum MissionStatus {
+  planned
   active
   completed
 }
@@ -104,6 +105,14 @@ note right of Participation
   Association plusieurs-à-plusieurs
   entre User et Mission.
   Filtre : /missions?participating=true
+end note
+
+note bottom of MissionStatus
+  Cycle de vie à sens unique.
+  Création : POST /missions (planned)
+  Suite : PATCH /missions/{id}
+  launchDate est renseignée
+  au passage à active
 end note
 
 note bottom of TravelEstimate

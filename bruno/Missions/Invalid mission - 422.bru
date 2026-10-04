@@ -1,0 +1,29 @@
+meta {
+  name: Invalid mission - 422
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/missions
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "Never Created",
+    "agency": "SpaceX",
+    "planets": ["pluto"],
+    "description": "Unknown agency and planet."
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.success: eq false
+}
+
+docs {
+  The body is well-formed, but the agency and the planet are unknown. A missing field would give a 400.
+}

@@ -2,7 +2,8 @@ import type { Mission } from "./types";
 
 // Une mission peut étudier plusieurs planètes, elle n'est donc pas imbriquée
 // sous une planète. Les planètes d'une mission sont listées dans l'ordre de
-// visite.
+// visite. La liste est modifiable : elle tient lieu de base de données pour les
+// missions créées ou mises à jour par l'API.
 export const missions: Mission[] = [
   {
     id: "pioneer-11",

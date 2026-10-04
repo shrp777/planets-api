@@ -1,0 +1,29 @@
+meta {
+  name: Mission already exists - 409
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/missions
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "{{missionName}}",
+    "agency": "NASA",
+    "planets": ["mars", "jupiter"],
+    "description": "Studies the ocean under the ice of Europa."
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.success: eq false
+}
+
+docs {
+  Every value is valid, but the id derived from the name is already taken by the mission created just before.
+}

@@ -35,7 +35,7 @@ src/
   travel.ts          calcul de l'estimation de trajet
   planets.ts         données : 8 planètes
   moons.ts           données : 22 lunes principales
-  missions.ts        données : 18 missions
+  missions.ts        données : 18 missions au démarrage, liste modifiable
   participations.ts  données : association utilisateur / mission
 tests/
   app.test.ts        tests de l'API
@@ -100,11 +100,12 @@ Chaque représentation porte un objet `links` : son propre lien (`self`) et les 
 | Statut | Signification dans l'API |
 | --- | --- |
 | `200` | Succès, y compris pour une liste vide et pour `POST /travel-estimation` (rien n'est créé, donc pas de `201`) |
+| `201` | Ressource créée par `POST /missions`, avec son URL dans l'en-tête `Location` |
 | `304` | La version en cache du client est à jour |
 | `400` | Requête mal formée : paramètre de requête invalide, JSON illisible, champ manquant ou du mauvais type |
 | `401` | Identifiants incorrects, ou token absent, invalide ou expiré |
 | `404` | La ressource désignée par l'URL n'existe pas |
-| `409` | Valeurs valides isolément mais en conflit entre elles (`from` et `to` identiques) |
+| `409` | Valeurs valides isolément mais en conflit entre elles (`from` et `to` identiques) ou avec l'état d'une ressource (mission déjà existante, changement de statut impossible) |
 | `422` | Corps bien formé, mais une valeur ne peut pas être traitée (planète inconnue, vitesse négative) |
 | `500` | Erreur interne |
 
@@ -127,9 +128,9 @@ Les listes se filtrent et se trient par paramètres de requête, combinables : `
 | Routes | En-têtes | Effet |
 | --- | --- | --- |
 | `/planets` et lunes | `Cache-Control: public, max-age=3600` et `ETag` | Les données sont statiques et identiques pour tous : navigateurs et proxys peuvent les conserver une heure |
-| `/missions` | `Cache-Control: private, no-cache` et `ETag` | Le contenu dépend de l'utilisateur : aucun cache partagé, et le navigateur revalide à chaque fois, ce qui revérifie le token |
+| `/missions` (lectures) | `Cache-Control: private, no-cache` et `ETag` | Le contenu dépend de l'utilisateur : aucun cache partagé, et le navigateur revalide à chaque fois, ce qui revérifie le token |
 | `/auth/*` | `Cache-Control: no-store` | Un token ne doit jamais être stocké par un cache |
-| `/travel-estimation`, `/health` | aucun | Réponses non mises en cache |
+| `/travel-estimation`, `/health`, écritures sur `/missions` | aucun | Réponses non mises en cache |
 
 Avec un `ETag`, le client renvoie l'empreinte de sa copie dans `If-None-Match` ; si elle est à jour, le serveur répond `304` sans corps.
 

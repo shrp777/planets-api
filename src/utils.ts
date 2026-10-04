@@ -21,6 +21,15 @@ const moonLinks = (moon: Moon) => ({
   planet: planetLink(moon.planetId),
 });
 
+// Identifiant lisible dérivé du nom : "Europa Clipper" devient "europa-clipper"
+export const slugify = (name: string) =>
+  name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
 export const toSummary = (planet: Planet): PlanetSummary => {
   const { id, name, order, type } = planet;
   return { id, name, order, type, links: { self: planetLink(id) } };
@@ -83,6 +92,11 @@ export const sortBy = <T>(
   return [...items].sort((a, b) => {
     const x = a[field];
     const y = b[field];
+    // Une valeur absente (mission pas encore lancée) est classée après les
+    // autres
+    if (x === null || y === null) {
+      return (Number(x === null) - Number(y === null)) * direction;
+    }
     const result =
       typeof x === "string" && typeof y === "string"
         ? x.localeCompare(y)

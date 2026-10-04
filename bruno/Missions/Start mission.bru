@@ -1,0 +1,32 @@
+meta {
+  name: Start mission
+  type: http
+  seq: 15
+}
+
+patch {
+  url: {{baseUrl}}/missions/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: {{missionId}}
+}
+
+body:json {
+  {
+    "status": "active"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.status: eq active
+  res.body.data.launchDate: isString
+}
+
+docs {
+  Partial update: PATCH only changes the status, from `planned` to `active`. The server sets the launch date to the current date.
+}

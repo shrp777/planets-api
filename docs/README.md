@@ -15,7 +15,7 @@ Cette documentation explique **pourquoi** l'API est construite ainsi. La référ
 | Élément | Choix |
 | --- | --- |
 | Runtime et framework | [Bun](https://bun.sh) et [Hono](https://hono.dev), en TypeScript |
-| Données | Statiques, en mémoire (aucune base de données) |
+| Données | En mémoire (aucune base de données) : statiques, sauf les missions, dont la persistance est simulée |
 | Format | JSON, avec un champ `success` dans toutes les réponses |
 | Routes publiques | `/planets`, les lunes, `/travel-estimation`, `/health`, `/openapi.json` |
 | Routes privées | `/missions`, `/auth/me` |
@@ -31,7 +31,7 @@ Source : [schemas/cas-utilisation.puml](schemas/cas-utilisation.puml)
 Deux acteurs utilisent l'API :
 
 - le **visiteur**, non authentifié, consulte les planètes et leurs lunes, estime un trajet et peut s'authentifier ;
-- l'**astronaute**, authentifié, peut faire tout ce que fait le visiteur, et accède en plus aux missions et à son profil.
+- l'**astronaute**, authentifié, peut faire tout ce que fait le visiteur, et accède en plus aux missions, qu'il peut aussi créer et faire avancer dans leur cycle de vie, et à son profil.
 
 Les cas d'utilisation privés incluent tous la vérification du token. Le filtre selon la participation étend la consultation des missions : c'est une variante facultative de la même requête. La déconnexion n'exige pas de token valide : elle se contente de supprimer le cookie.
 

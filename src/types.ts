@@ -62,7 +62,8 @@ export const AGENCIES = ["NASA", "ESA", "JAXA", "ISRO", "CNSA"] as const;
 
 export type Agency = (typeof AGENCIES)[number];
 
-export const MISSION_STATUSES = ["active", "completed"] as const;
+// Dans l'ordre du cycle de vie : une mission ne peut passer qu'au statut suivant
+export const MISSION_STATUSES = ["planned", "active", "completed"] as const;
 
 export type MissionStatus = (typeof MISSION_STATUSES)[number];
 
@@ -70,7 +71,9 @@ export type Mission = {
   id: string;
   name: string;
   agency: Agency;
-  launchDate: string;
+  // Inconnue tant que la mission est planifiée : renseignée quand elle devient
+  // active
+  launchDate: string | null;
   status: MissionStatus;
   planets: string[];
   description: string;

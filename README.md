@@ -61,7 +61,9 @@ bunx @usebruno/cli run -r --env Local
 | GET     | `/planets/{id}/moons` | Lunes principales d'une planète (ex : `/planets/mars/moons`) |
 | GET     | `/planets/{id}/moons/{moonId}` | Détail d'une lune (ex : `/planets/jupiter/moons/europa`) |
 | GET     | `/missions` | 🔒 Liste résumée des missions spatiales (filtrable, triable) |
+| POST    | `/missions` | 🔒 Création d'une mission, avec le statut `planned` |
 | GET     | `/missions/{id}` | 🔒 Détail d'une mission (ex : `/missions/voyager-2`) |
+| PATCH   | `/missions/{id}` | 🔒 Mise à jour du statut d'une mission (`active`, puis `completed`) |
 | POST    | `/travel-estimation` | Calcul d'une estimation de trajet entre deux planètes |
 | POST    | `/auth/login` | Authentification, le token JWT est renvoyé dans le corps ou déposé dans un cookie `httpOnly` (champ `delivery`) |
 | POST    | `/auth/logout` | Suppression du cookie d'authentification |
@@ -71,7 +73,7 @@ Les routes marquées 🔒 sont privées : elles exigent un token JWT valide (voi
 
 - Toutes les réponses sont au format JSON et comportent un champ `success`.
 - Les routes `/planets` renvoient les en-têtes `Cache-Control: public, max-age=3600` et `ETag` (une requête `If-None-Match` à jour reçoit un `304`).
-- Les routes `/missions`, privées, renvoient `Cache-Control: private, no-cache` et `ETag` : la réponse n'est jamais stockée par un cache partagé, et le navigateur la revalide à chaque fois, ce qui revérifie le token.
+- Les lectures (`GET`) des routes `/missions`, privées, renvoient `Cache-Control: private, no-cache` et `ETag` : la réponse n'est jamais stockée par un cache partagé, et le navigateur la revalide à chaque fois, ce qui revérifie le token.
 - CORS est ouvert à toutes les origines, sauf pour les routes `/auth/*` et `/missions` : elles acceptent les cookies (`Access-Control-Allow-Credentials: true`) et ne sont donc ouvertes qu'aux origines listées dans `CORS_ORIGIN`.
 - Les données entrantes (paramètres de requête et corps JSON) sont validées par des schémas [zod](https://zod.dev) définis dans `src/schemas.ts` ; le champ `error` de la réponse liste tous les champs en cause (voir [Erreurs](#erreurs) pour les statuts `400`, `409` et `422`).
 
@@ -86,7 +88,7 @@ Les routes marquées 🔒 sont privées : elles exigent un token JWT valide (voi
     "openapi": "/openapi.json",
     "planets": ["/planets", "/planets/{id}"],
     "moons": ["/planets/{id}/moons", "/planets/{id}/moons/{moonId}"],
-    "missions": ["/missions", "/missions/{id}"],
+    "missions": ["/missions", "POST /missions", "/missions/{id}", "PATCH /missions/{id}"],
     "travelEstimation": "POST /travel-estimation",
     "auth": ["POST /auth/login", "POST /auth/logout", "/auth/me"]
   }
@@ -214,11 +216,12 @@ Paramètres de requête optionnels, combinables :
 | --------- | ------------------------------------- | ------------------- |
 | `planet`  | identifiant d'une planète             | `?planet=saturn`    |
 | `agency`  | `NASA`, `ESA`, `JAXA`, `ISRO`, `CNSA` | `?agency=ESA`       |
-| `status`  | `active`, `completed`                 | `?status=active`    |
+| `status`  | `planned`, `active`, `completed`      | `?status=active`    |
 | `participating` | `true`, `false`                 | `?participating=true` |
 | `sort`    | `launchDate`, `name`, `status`        | `?sort=-launchDate` |
 
 - `agency` est l'agence principale de la mission.
+- Avec `sort=launchDate`, les missions sans date de lancement (statut `planned`) sont classées en dernier ; en premier avec `sort=-launchDate`.
 - `participating` filtre selon la participation de l'utilisateur connecté : `true` ne garde que ses missions, `false` que les autres (voir ci-dessous).
 - Une valeur invalide renvoie un `400` ; une planète sans mission (ex : `?planet=earth`) renvoie un `200` avec `"data": []`.
 
@@ -280,6 +283,90 @@ L'identifiant est insensible à la casse. `planets` liste les planètes étudié
   "message": "Detailed information about mission Voyager 2"
 }
 ```
+
+### POST /missions
+
+Route privée. Crée une mission dans la collection.
+
+- La mission est toujours créée avec le statut `planned` et sans date de lancement (`"launchDate": null`) : le client ne choisit ni l'un ni l'autre, les champs `status` et `launchDate` envoyés dans le corps sont ignorés.
+- L'identifiant est dérivé du nom : `Europa Clipper` devient `europa-clipper`.
+- Une ressource est créée : la réponse est un `201`, avec l'URL de la mission dans l'en-tête `Location` et sa représentation complète dans le corps.
+- La persistance est simulée : la mission est ajoutée à la liste en mémoire (`src/missions.ts`). Elle est visible par les autres routes, mais perdue au redémarrage du serveur.
+
+Corps de la requête (`Content-Type: application/json`), tous les champs sont obligatoires :
+
+| Champ         | Type     | Description                                                   |
+| ------------- | -------- | ------------------------------------------------------------- |
+| `name`        | string   | Nom, avec au moins une lettre ou un chiffre                   |
+| `agency`      | string   | `NASA`, `ESA`, `JAXA`, `ISRO` ou `CNSA`                       |
+| `planets`     | string[] | Identifiants des planètes étudiées, au moins un, sans doublon |
+| `description` | string   | Description, non vide                                         |
+
+```sh
+curl -i -X POST http://localhost:3000/missions \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Europa Clipper", "agency": "NASA", "planets": ["mars", "jupiter"], "description": "Studies the ocean under the ice of Europa."}'
+```
+
+```
+HTTP/1.1 201 Created
+Location: /missions/europa-clipper
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "europa-clipper",
+    "name": "Europa Clipper",
+    "agency": "NASA",
+    "launchDate": null,
+    "status": "planned",
+    "planets": [
+      { "id": "mars", "name": "Mars", "links": { "self": "/planets/mars" } },
+      { "id": "jupiter", "name": "Jupiter", "links": { "self": "/planets/jupiter" } }
+    ],
+    "description": "Studies the ocean under the ice of Europa.",
+    "links": { "self": "/missions/europa-clipper" }
+  },
+  "message": "Mission Europa Clipper created"
+}
+```
+
+| Statut | Cas                                                                                     |
+| ------ | --------------------------------------------------------------------------------------- |
+| `400`  | JSON illisible, champ manquant ou du mauvais type                                       |
+| `401`  | Token absent, invalide ou expiré                                                        |
+| `409`  | Une mission porte déjà cet identifiant (ex : `Voyager 2`)                               |
+| `422`  | Agence ou planète inconnue, nom ou description vide, planète en double                  |
+
+### PATCH /missions/{id}
+
+Route privée. Met à jour le statut d'une mission. Le verbe est `PATCH` car la mise à jour est partielle : seul le champ `status` est modifiable.
+
+Le cycle de vie est à sens unique : `planned`, puis `active`, puis `completed`. Seul le statut suivant est accepté : une mission ne saute pas d'étape, ne revient pas en arrière, et une mission `completed` ne change plus.
+
+```sh
+curl -X PATCH http://localhost:3000/missions/europa-clipper \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "active"}'
+```
+
+Passer à `active`, c'est lancer la mission : le serveur renseigne alors `launchDate` avec la date du jour (UTC). Le client ne l'envoie pas, et la date est conservée quand la mission passe à `completed`.
+
+La réponse est un `200` avec la représentation complète de la mission, comme `GET /missions/{id}`, et le message `Mission Europa Clipper is now active`.
+
+| Statut | Cas                                                                                 |
+| ------ | ----------------------------------------------------------------------------------- |
+| `400`  | JSON illisible, champ `status` manquant ou du mauvais type                          |
+| `401`  | Token absent, invalide ou expiré                                                    |
+| `404`  | Mission inconnue                                                                    |
+| `409`  | Statut valide, mais qui n'est pas le suivant dans le cycle de vie de la mission     |
+| `422`  | Statut inconnu (ex : `cancelled`)                                                   |
+
+Comme la persistance est simulée en mémoire, le changement de statut est lui aussi perdu au redémarrage du serveur.
 
 ### POST /travel-estimation
 
@@ -445,6 +532,8 @@ Le middleware `authenticate` de `src/auth.ts` protège de la même façon toutes
 | ------ | ------------------------------ | --------------------------------------------------------- |
 | 400    | Paramètre de requête invalide, ou corps mal formé | `{ "success": false, "error": "Invalid planet: expected one of: ..." }` |
 | 409    | Corps dont les valeurs sont en conflit | `{ "success": false, "error": "Conflict between from and to: expected two different planets" }` |
+| 409    | Mission déjà existante | `{ "success": false, "error": "Conflict on name: mission voyager-2 already exists" }` |
+| 409    | Changement de statut impossible | `{ "success": false, "error": "Conflict on status: a planned mission can only become active" }` |
 | 422    | Corps bien formé avec une valeur non traitable | `{ "success": false, "error": "Invalid speedKmPerSecond: Too small: expected number to be >0" }` |
 | 401    | Identifiants incorrects | `{ "success": false, "error": "Invalid credentials" }` |
 | 401    | Token absent, invalide ou expiré | `{ "success": false, "error": "Missing, invalid or expired token" }` |

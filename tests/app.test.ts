@@ -461,6 +461,216 @@ describe("GET /missions/:id", () => {
   });
 });
 
+const writeMission = async (method: string, path: string, body: unknown) =>
+  app.request(path, {
+    method,
+    headers: {
+      Authorization: `Bearer ${await createToken(user)}`,
+      "Content-Type": "application/json",
+    },
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  });
+
+const europaClipper = {
+  name: "Europa Clipper",
+  agency: "NASA",
+  planets: ["mars", "jupiter"],
+  description: "Studies the ocean under the ice of Europa.",
+};
+
+// Les missions créées ici restent en mémoire : ces tests sont placés après
+// ceux qui comptent les missions
+describe("POST /missions", () => {
+  test("requires a token", async () => {
+    const res = await app.request("/missions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(europaClipper),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  test("creates a planned mission and returns its location", async () => {
+    const res = await writeMission("POST", "/missions", europaClipper);
+    expect(res.status).toBe(201);
+    expect(res.headers.get("Location")).toBe("/missions/europa-clipper");
+    expect(res.headers.get("Cache-Control")).toBeNull();
+    expect(res.headers.get("ETag")).toBeNull();
+    expect(await res.json()).toEqual({
+      success: true,
+      data: {
+        id: "europa-clipper",
+        name: "Europa Clipper",
+        agency: "NASA",
+        launchDate: null,
+        status: "planned",
+        planets: [
+          { id: "mars", name: "Mars", links: { self: "/planets/mars" } },
+          { id: "jupiter", name: "Jupiter", links: { self: "/planets/jupiter" } },
+        ],
+        description: "Studies the ocean under the ice of Europa.",
+        links: { self: "/missions/europa-clipper" },
+      },
+      message: "Mission Europa Clipper created",
+    });
+  });
+
+  test("keeps the created mission available to the other routes", async () => {
+    const detail = await authRequest("/missions/europa-clipper");
+    expect(detail.status).toBe(200);
+    expect((await detail.json()).data.status).toBe("planned");
+
+    const planned = await authRequest("/missions?status=planned");
+    expect(ids(await planned.json())).toEqual(["europa-clipper"]);
+  });
+
+  test("ignores a status and a launch date sent by the client", async () => {
+    const res = await writeMission("POST", "/missions", {
+      ...europaClipper,
+      name: "Dragonfly",
+      status: "completed",
+      launchDate: "2028-07-05",
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.data.status).toBe("planned");
+    expect(body.data.launchDate).toBeNull();
+  });
+
+  test("sorts the missions without a launch date after the others", async () => {
+    const dates = async (query: string) => {
+      const body = await (await authRequest(`/missions?${query}`)).json();
+      return body.data.map((m: { launchDate: string | null }) => m.launchDate);
+    };
+    const asc = await dates("sort=launchDate");
+    expect(asc.slice(0, 18)).not.toContain(null);
+    expect(asc.slice(18)).toEqual([null, null]);
+    expect((await dates("sort=-launchDate")).slice(0, 2)).toEqual([null, null]);
+  });
+
+  test("derives the id from the name", async () => {
+    const res = await writeMission("POST", "/missions", {
+      ...europaClipper,
+      name: "  Véritas / EnVision 2 ",
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.data.id).toBe("veritas-envision-2");
+    expect(body.data.name).toBe("Véritas / EnVision 2");
+  });
+
+  test("returns 409 when the mission already exists", async () => {
+    for (const name of ["Europa Clipper", "europa clipper", "Voyager 2"]) {
+      const res = await writeMission("POST", "/missions", {
+        ...europaClipper,
+        name,
+      });
+      expect(res.status).toBe(409);
+      expect((await res.json()).success).toBe(false);
+    }
+  });
+
+  test("returns 400 for a malformed body", async () => {
+    const { description, ...missingField } = europaClipper;
+    for (const body of [
+      "{ not json",
+      missingField,
+      { ...europaClipper, planets: "jupiter" },
+      { ...europaClipper, agency: 42 },
+    ]) {
+      const res = await writeMission("POST", "/missions", body);
+      expect(res.status).toBe(400);
+    }
+  });
+
+  test("returns 422 for values that cannot be processed", async () => {
+    for (const invalid of [
+      { name: "!!!" },
+      { agency: "SpaceX" },
+      { planets: [] },
+      { planets: ["pluto"] },
+      { planets: ["mars", "mars"] },
+      { description: " " },
+    ]) {
+      const res = await writeMission("POST", "/missions", {
+        ...europaClipper,
+        name: "Never Created",
+        ...invalid,
+      });
+      expect(res.status).toBe(422);
+    }
+    expect((await authRequest("/missions/never-created")).status).toBe(404);
+  });
+});
+
+describe("PATCH /missions/:id", () => {
+  const setStatus = (id: string, status: unknown) =>
+    writeMission("PATCH", `/missions/${id}`, { status });
+
+  test("requires a token", async () => {
+    const res = await app.request("/missions/europa-clipper", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "active" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  test("refuses to skip a status", async () => {
+    const res = await setStatus("europa-clipper", "completed");
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      success: false,
+      error: "Conflict on status: a planned mission can only become active",
+    });
+  });
+
+  test("moves a mission from planned to active, then to completed", async () => {
+    // La date de lancement est fixée au passage à active, puis conservée
+    const today = new Date().toISOString().slice(0, 10);
+    for (const status of ["active", "completed"]) {
+      const res = await setStatus("Europa-Clipper", status);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Cache-Control")).toBeNull();
+      const body = await res.json();
+      expect(body.data.status).toBe(status);
+      expect(body.data.launchDate).toBe(today);
+      expect(body.data.links).toEqual({ self: "/missions/europa-clipper" });
+
+      const detail = await authRequest("/missions/europa-clipper");
+      expect((await detail.json()).data.status).toBe(status);
+    }
+  });
+
+  test("refuses to change a completed mission or to go backwards", async () => {
+    for (const status of ["planned", "active", "completed"]) {
+      const res = await setStatus("europa-clipper", status);
+      expect(res.status).toBe(409);
+      expect((await res.json()).error).toBe(
+        "Conflict on status: a completed mission cannot change status anymore",
+      );
+    }
+  });
+
+  test("returns 404 for an unknown mission", async () => {
+    const res = await setStatus("apollo-11", "active");
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({
+      success: false,
+      error: "Mission not found",
+    });
+  });
+
+  test("returns 400 for a malformed body and 422 for an unknown status", async () => {
+    expect((await writeMission("PATCH", "/missions/dragonfly", {})).status).toBe(400);
+    expect((await setStatus("dragonfly", 1)).status).toBe(400);
+    expect((await setStatus("dragonfly", "cancelled")).status).toBe(422);
+    const mission = (await (await authRequest("/missions/dragonfly")).json()).data;
+    expect(mission.status).toBe("planned");
+    expect(mission.launchDate).toBeNull();
+  });
+});
+
 const postEstimate = (body: unknown) =>
   app.request("/travel-estimation", {
     method: "POST",

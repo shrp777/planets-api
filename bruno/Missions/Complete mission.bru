@@ -1,0 +1,31 @@
+meta {
+  name: Complete mission
+  type: http
+  seq: 16
+}
+
+patch {
+  url: {{baseUrl}}/missions/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: {{missionId}}
+}
+
+body:json {
+  {
+    "status": "completed"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+  res.body.data.status: eq completed
+}
+
+docs {
+  Last step of the lifecycle: from `active` to `completed`. A completed mission cannot change anymore.
+}

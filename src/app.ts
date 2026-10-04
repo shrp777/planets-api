@@ -21,13 +21,17 @@ import { participations } from "./participations";
 import { planets } from "./planets";
 import {
   loginSchema,
+  missionCreationSchema,
   missionsQuerySchema,
+  missionStatusSchema,
   planetsQuerySchema,
   travelEstimationSchema,
   validate,
 } from "./schemas";
 import { estimateTravel } from "./travel";
+import { MISSION_STATUSES, type Mission } from "./types";
 import {
+  slugify,
   sortBy,
   toDetail,
   toMissionDetail,
@@ -79,7 +83,12 @@ app.get("/", (c) => {
         openapi: "/openapi.json",
         planets: ["/planets", "/planets/{id}"],
         moons: ["/planets/{id}/moons", "/planets/{id}/moons/{moonId}"],
-        missions: ["/missions", "/missions/{id}"],
+        missions: [
+          "/missions",
+          "POST /missions",
+          "/missions/{id}",
+          "PATCH /missions/{id}",
+        ],
         travelEstimation: "POST /travel-estimation",
         auth: [
           "POST /auth/login",
@@ -117,12 +126,13 @@ app.use("/planets/*", async (c, next) => {
   }
 });
 
-// Routes privées : un token valide est exigé. La réponse ne doit pas être
-// stockée par un cache partagé, et le navigateur doit la revalider à chaque
-// fois (no-cache) pour que le token soit de nouveau vérifié
+// Routes privées : un token valide est exigé. La réponse à une lecture ne doit
+// pas être stockée par un cache partagé, et le navigateur doit la revalider à
+// chaque fois (no-cache) pour que le token soit de nouveau vérifié. Les
+// écritures (POST, PATCH) ne sont pas concernées par le cache
 app.use("/missions/*", authenticate);
-app.use("/missions/*", etag());
-app.use("/missions/*", async (c, next) => {
+app.get("/missions/*", etag());
+app.get("/missions/*", async (c, next) => {
   await next();
   if (c.res.ok) {
     c.header("Cache-Control", "private, no-cache");
@@ -258,6 +268,92 @@ app.get("/missions/:id", (c) => {
       success: true,
       data: toMissionDetail(mission),
       message: `Detailed information about mission ${mission.name}`,
+    },
+    200,
+  );
+});
+
+// Création : POST sur la collection. La persistance est simulée : la mission
+// est ajoutée à la liste en mémoire, elle est donc visible par les autres
+// routes mais perdue au redémarrage du serveur
+app.post("/missions", validate("json", missionCreationSchema), (c) => {
+  const { name, agency, planets, description } = c.req.valid("json");
+  const id = slugify(name);
+
+  // Chaque valeur est valide, mais l'identifiant dérivé du nom est déjà pris
+  if (missions.some((m) => m.id === id)) {
+    return c.json(
+      {
+        success: false,
+        error: `Conflict on name: mission ${id} already exists`,
+      },
+      409,
+    );
+  }
+
+  // Le statut n'est jamais choisi par le client : toute mission commence
+  // planifiée, donc sans date de lancement
+  const mission: Mission = {
+    id,
+    name,
+    agency,
+    launchDate: null,
+    status: "planned",
+    planets,
+    description,
+  };
+  missions.push(mission);
+
+  // 201 et en-tête Location : une ressource a été créée, voici son URL
+  const data = toMissionDetail(mission);
+  c.header("Location", data.links.self);
+  return c.json(
+    {
+      success: true,
+      data,
+      message: `Mission ${mission.name} created`,
+    },
+    201,
+  );
+});
+
+// Mise à jour partielle : le client n'envoie que le statut. Le cycle de vie
+// est à sens unique : planned, puis active, puis completed
+app.patch("/missions/:id", validate("json", missionStatusSchema), (c) => {
+  const id = c.req.param("id").toLowerCase();
+  const mission = missions.find((m) => m.id === id);
+  if (!mission) {
+    return c.json({ success: false, error: "Mission not found" }, 404);
+  }
+
+  const { status } = c.req.valid("json");
+  const next = MISSION_STATUSES[MISSION_STATUSES.indexOf(mission.status) + 1];
+
+  // Le statut demandé est valide, mais en conflit avec l'état de la mission
+  if (status !== next) {
+    const expected = next
+      ? `can only become ${next}`
+      : "cannot change status anymore";
+    return c.json(
+      {
+        success: false,
+        error: `Conflict on status: a ${mission.status} mission ${expected}`,
+      },
+      409,
+    );
+  }
+
+  mission.status = status;
+  // Passer à active, c'est lancer la mission : la date de lancement est celle
+  // du jour (UTC), fixée par le serveur et non par le client
+  if (status === "active") {
+    mission.launchDate = new Date().toISOString().slice(0, 10);
+  }
+  return c.json(
+    {
+      success: true,
+      data: toMissionDetail(mission),
+      message: `Mission ${mission.name} is now ${mission.status}`,
     },
     200,
   );

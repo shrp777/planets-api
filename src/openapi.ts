@@ -75,7 +75,12 @@ const missionSummaryProperties = {
   id: { type: "string", example: "voyager-2" },
   name: { type: "string", example: "Voyager 2" },
   agency: { type: "string", enum: AGENCIES, description: "Lead agency" },
-  launchDate: { type: "string", format: "date", example: "1977-08-20" },
+  launchDate: {
+    type: ["string", "null"],
+    format: "date",
+    example: "1977-08-20",
+    description: "null while the mission is planned",
+  },
   status: { type: "string", enum: MISSION_STATUSES },
   links: {
     type: "object",
@@ -83,6 +88,17 @@ const missionSummaryProperties = {
     properties: { self: { type: "string", example: "/missions/voyager-2" } },
   },
 };
+
+const missionIdParameter = {
+  name: "id",
+  in: "path",
+  required: true,
+  description: "Mission identifier (case-insensitive)",
+  schema: { type: "string", example: "voyager-2" },
+};
+
+const missionResponse = (description: string) =>
+  successResponse(description, { $ref: "#/components/schemas/Mission" });
 
 const planetIdParameter = {
   name: "id",
@@ -314,7 +330,7 @@ export const openApiDocument = {
             name: "sort",
             in: "query",
             description:
-              "Field to sort by, prefixed with - for descending order (e.g. -launchDate)",
+              "Field to sort by, prefixed with - for descending order (e.g. -launchDate). Missions without a launch date come last in ascending order",
             schema: {
               type: "string",
               enum: MISSION_SORTABLE_FIELDS.flatMap((field) => [
@@ -348,20 +364,62 @@ export const openApiDocument = {
           "401": errorResponse("Missing, invalid or expired token"),
         },
       },
+      post: {
+        summary: "Create a mission",
+        description:
+          "The mission is created with the planned status and no launch date, and its id is derived from its name (Europa Clipper becomes europa-clipper). Persistence is simulated: the mission is kept in memory and lost when the server restarts.",
+        security: [{ bearerAuth: [] }, { cookieAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["name", "agency", "planets", "description"],
+                properties: {
+                  name: { type: "string", example: "Europa Clipper" },
+                  agency: { type: "string", enum: AGENCIES },
+                  planets: {
+                    type: "array",
+                    minItems: 1,
+                    uniqueItems: true,
+                    description: "Planet ids, in the order they are visited",
+                    items: { type: "string", example: "jupiter" },
+                  },
+                  description: { type: "string", minLength: 1 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "201": {
+            ...missionResponse("Mission created, with the planned status"),
+            headers: {
+              Location: {
+                description: "URL of the created mission",
+                schema: { type: "string", example: "/missions/europa-clipper" },
+              },
+            },
+          },
+          "400": errorResponse(
+            "Malformed request: invalid JSON, missing field or wrong type",
+          ),
+          "401": errorResponse("Missing, invalid or expired token"),
+          "409": errorResponse(
+            "Conflict: a mission with the same id already exists",
+          ),
+          "422": errorResponse(
+            "Well-formed body with a value that cannot be processed: unknown agency or planet, duplicated planet, empty name or description",
+          ),
+        },
+      },
     },
     "/missions/{id}": {
       get: {
         summary: "Get a mission by id",
         security: [{ bearerAuth: [] }, { cookieAuth: [] }],
-        parameters: [
-          {
-            name: "id",
-            in: "path",
-            required: true,
-            description: "Mission identifier (case-insensitive)",
-            schema: { type: "string", example: "voyager-2" },
-          },
-        ],
+        parameters: [missionIdParameter],
         responses: {
           "200": {
             description: "Mission details",
@@ -381,6 +439,45 @@ export const openApiDocument = {
           },
           "401": errorResponse("Missing, invalid or expired token"),
           "404": errorResponse("Mission not found"),
+        },
+      },
+      patch: {
+        summary: "Update the status of a mission",
+        description:
+          "The lifecycle is one-way: planned, then active, then completed. Only the next status is accepted. When the mission becomes active, its launch date is set to the current date (UTC).",
+        security: [{ bearerAuth: [] }, { cookieAuth: [] }],
+        parameters: [missionIdParameter],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["status"],
+                properties: {
+                  status: {
+                    type: "string",
+                    enum: MISSION_STATUSES,
+                    example: "active",
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": missionResponse("Mission with its new status"),
+          "400": errorResponse(
+            "Malformed request: invalid JSON, missing field or wrong type",
+          ),
+          "401": errorResponse("Missing, invalid or expired token"),
+          "404": errorResponse("Mission not found"),
+          "409": errorResponse(
+            "Conflict: the status is not the next one in the lifecycle of the mission",
+          ),
+          "422": errorResponse(
+            "Well-formed body with a value that cannot be processed: unknown status",
+          ),
         },
       },
     },

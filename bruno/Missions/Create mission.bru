@@ -1,0 +1,42 @@
+meta {
+  name: Create mission
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/missions
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "{{missionName}}",
+    "agency": "NASA",
+    "planets": ["mars", "jupiter"],
+    "description": "Studies the ocean under the ice of Europa."
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.success: eq true
+  res.body.data.status: eq planned
+  res.body.data.launchDate: isNull
+  res.headers.location: eq {{missionLocation}}
+}
+
+script:pre-request {
+  const name = `Europa Clipper ${Date.now()}`;
+  bru.setVar("missionName", name);
+  bru.setVar("missionLocation", `/missions/${name.toLowerCase().replaceAll(" ", "-")}`);
+}
+
+script:post-response {
+  bru.setVar("missionId", res.body.data.id);
+}
+
+docs {
+  A resource is created: the answer is 201 with a `Location` header. The status is always `planned`, without a launch date, and the id is derived from the name. Persistence is simulated: the mission is kept in memory, so restart the server to get the initial 18 missions back (the name is made unique to allow several runs).
+}

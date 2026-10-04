@@ -1,0 +1,31 @@
+meta {
+  name: Skip a status - 409
+  type: http
+  seq: 14
+}
+
+patch {
+  url: {{baseUrl}}/missions/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: {{missionId}}
+}
+
+body:json {
+  {
+    "status": "completed"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.success: eq false
+  res.body.error: eq Conflict on status: a planned mission can only become active
+}
+
+docs {
+  The status is valid, but a planned mission must become active before being completed.
+}
