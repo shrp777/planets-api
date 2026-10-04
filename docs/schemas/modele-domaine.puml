@@ -1,0 +1,113 @@
+@startuml modele-domaine
+title Modèle du domaine
+
+hide circle
+hide methods
+skinparam classAttributeIconSize 0
+
+class Planet {
+  id : string
+  name : string
+  order : number
+  type : PlanetType
+  diameterKm : number
+  massKg : number
+  distanceFromSunAU : number
+  orbitalPeriodDays : number
+  rotationPeriodHours : number
+  moonsCount : number
+  hasRings : boolean
+  avgTemperatureCelsius : number
+  description : string
+}
+
+class Moon {
+  id : string
+  name : string
+  planetId : string
+  diameterKm : number
+  distanceFromPlanetKm : number
+  orbitalPeriodDays : number
+  description : string
+}
+
+class Mission {
+  id : string
+  name : string
+  agency : Agency
+  launchDate : string
+  status : MissionStatus
+  planets : string[]
+  description : string
+}
+
+class User {
+  id : UUID
+  email : string
+  role : UserRole
+  passwordHash : string
+}
+
+class Participation {
+  userId : UUID
+  missionId : string
+}
+
+class TravelEstimate <<calculée>> {
+  speedKmPerSecond : number
+  distanceAU : number
+  distanceKm : number
+  durationSeconds : number
+  durationDays : number
+}
+
+enum PlanetType {
+  terrestrial
+  gas giant
+  ice giant
+}
+
+enum Agency {
+  NASA
+  ESA
+  JAXA
+  ISRO
+  CNSA
+}
+
+enum MissionStatus {
+  active
+  completed
+}
+
+enum UserRole {
+  astronaut
+}
+
+Planet "1" *-- "0..*" Moon : possède
+Mission "0..*" -- "1..*" Planet : étudie
+User "1" -- "0..*" Participation
+Participation "0..*" -- "1" Mission
+TravelEstimate "0..*" --> "2" Planet : from, to
+
+Planet ..> PlanetType
+Mission ..> Agency
+Mission ..> MissionStatus
+User ..> UserRole
+
+note bottom of Moon
+  Ressource imbriquée :
+  /planets/{id}/moons
+end note
+
+note right of Participation
+  Association plusieurs-à-plusieurs
+  entre User et Mission.
+  Filtre : /missions?participating=true
+end note
+
+note bottom of TravelEstimate
+  Non stockée : résultat de
+  POST /travel-estimation
+end note
+@enduml

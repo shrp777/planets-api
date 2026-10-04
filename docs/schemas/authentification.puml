@@ -1,0 +1,36 @@
+@startuml authentification
+title Authentification : deux modes de remise du token
+
+actor "Client d'API" as Client
+actor "Front end\n(navigateur)" as Front
+participant "API" as API
+
+== delivery: token (par défaut) ==
+
+Client -> API : POST /auth/login\n{ email, password }
+API -> API : vérifie le mot de passe\nsigne le token
+API --> Client : 200 { accessToken, tokenType, expiresIn }
+Client -> API : GET /missions\nAuthorization: Bearer <token>
+API -> API : vérifie la signature\net l'expiration
+API --> Client : 200 { data: missions }
+
+== delivery: cookie ==
+
+Front -> API : POST /auth/login\n{ email, password, delivery: "cookie" }
+API -> API : vérifie le mot de passe\nsigne le token
+API --> Front : 200 { id, email, role, expiresIn }\nSet-Cookie: access_token (HttpOnly, SameSite=Lax)
+note right of Front
+  Le token n'est pas dans le corps :
+  JavaScript ne peut pas le lire
+end note
+Front -> API : GET /missions\nCookie: access_token (envoyé par le navigateur)
+API -> API : vérifie la signature\net l'expiration
+API --> Front : 200 { data: missions }
+Front -> API : POST /auth/logout
+API --> Front : 200\nSet-Cookie: access_token vide, Max-Age=0
+
+== Token absent, invalide ou expiré ==
+
+Client -> API : GET /missions
+API --> Client : 401\nWWW-Authenticate: Bearer
+@enduml

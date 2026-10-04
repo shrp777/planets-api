@@ -1,0 +1,37 @@
+@startuml parcours-requete
+title Parcours d'une requête
+
+start
+:Requête HTTP;
+:Suppression du slash final;
+:CORS;
+if (Route privée ?) then (oui)
+  :authenticate : lecture du token
+  (en-tête Authorization, sinon cookie);
+  if (Token valide ?) then (non)
+    :401 Unauthorized;
+    stop
+  else (oui)
+  endif
+else (non)
+endif
+:ETag et Cache-Control;
+if (Données entrantes ?) then (oui)
+  :Validation par un schéma zod;
+  if (Données valides ?) then (non)
+    :400 ou 422;
+    stop
+  else (oui)
+  endif
+else (non)
+endif
+:Handler : lecture, filtrage, tri;
+if (Ressource trouvée ?) then (non)
+  :404 Not Found;
+  stop
+else (oui)
+endif
+:Réponse JSON
+{ success, data, message };
+stop
+@enduml

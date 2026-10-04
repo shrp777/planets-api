@@ -1,0 +1,23 @@
+@startuml filtre-utilisateur
+title Filtrer les missions selon l'utilisateur connecté
+
+actor "Client" as Client
+participant "authenticate" as Auth
+participant "Handler\nGET /missions" as Handler
+database "participations" as Participations
+database "missions" as Missions
+
+Client -> Auth : GET /missions?participating=true\n+ token
+Auth -> Auth : vérifie la signature\nlit sub et role
+Auth -> Handler : user = { id, role }
+Handler -> Participations : participations de user.id
+Participations --> Handler : juno, curiosity, perseverance
+Handler -> Missions : missions correspondantes
+Missions --> Handler : 3 missions
+Handler --> Client : 200 { data: 3 missions }\nCache-Control: private, no-cache
+
+note over Client, Auth
+  L'identifiant vient du token (revendication sub),
+  jamais d'un paramètre : il n'existe pas de ?userId=
+end note
+@enduml

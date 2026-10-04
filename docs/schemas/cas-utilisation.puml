@@ -1,0 +1,49 @@
+@startuml cas-utilisation
+title Cas d'utilisation
+
+left to right direction
+
+actor "Visiteur\n(non authentifié)" as Visiteur
+actor "Astronaute\n(authentifié)" as Astronaute
+
+Visiteur <|-- Astronaute
+
+rectangle "Planets API" {
+  package "Accès public" {
+    usecase "Consulter la liste des planètes\n(filtrer, trier)" as UC1
+    usecase "Consulter le détail d'une planète" as UC2
+    usecase "Consulter les lunes d'une planète" as UC3
+    usecase "Estimer un trajet\nentre deux planètes" as UC4
+    usecase "Consulter le contrat OpenAPI" as UC5
+    usecase "Vérifier l'état de l'API" as UC6
+    usecase "S'authentifier\n(token ou cookie)" as UC7
+  }
+
+  package "Accès privé" {
+    usecase "Consulter la liste des missions\n(filtrer, trier)" as UC8
+    usecase "Consulter le détail d'une mission" as UC9
+    usecase "Filtrer les missions\nselon sa participation" as UC10
+    usecase "Consulter son profil" as UC11
+    usecase "Se déconnecter" as UC12
+    usecase "Vérifier le token" as UC13
+  }
+}
+
+Visiteur --> UC1
+Visiteur --> UC2
+Visiteur --> UC3
+Visiteur --> UC4
+Visiteur --> UC5
+Visiteur --> UC6
+Visiteur --> UC7
+
+Astronaute --> UC8
+Astronaute --> UC9
+Astronaute --> UC11
+Astronaute --> UC12
+
+UC10 .> UC8 : <<extend>>
+UC8 ..> UC13 : <<include>>
+UC9 ..> UC13 : <<include>>
+UC11 ..> UC13 : <<include>>
+@enduml

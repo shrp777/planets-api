@@ -1,0 +1,52 @@
+@startuml architecture
+title Architecture de l'API
+
+skinparam componentStyle rectangle
+
+actor "Application front end\n(navigateur, React)" as Front
+actor "Client d'API\n(script, mobile, serveur)" as Client
+
+node "Conteneur Docker (Bun)" {
+  component "index.ts\ndémarrage du serveur" as Index
+
+  package "app.ts (Hono)" {
+    component "Middlewares globaux\nslash final, CORS" as Global
+    component "authenticate\nroutes privées" as Auth
+    component "ETag et Cache-Control" as Cache
+    component "validate\nschémas zod" as Validate
+    component "Handlers des routes" as Handlers
+  }
+
+  component "auth.ts\ntoken JWT, cookie, utilisateur" as AuthModule
+  component "schemas.ts" as Schemas
+  component "utils.ts, travel.ts\nreprésentations, tri, calcul" as Utils
+  component "openapi.ts\ncontrat OpenAPI 3.1" as OpenApi
+
+  database "Données en mémoire" as Data {
+    component "planets.ts" as Planets
+    component "moons.ts" as Moons
+    component "missions.ts" as Missions
+    component "participations.ts" as Participations
+  }
+}
+
+file ".env\nPORT, JWT_SECRET, CORS_ORIGIN" as Env
+
+Front --> Global : HTTP + cookie httpOnly
+Client --> Global : HTTP + Authorization: Bearer
+
+Index --> Global
+Global --> Auth
+Auth --> Cache
+Cache --> Validate
+Validate --> Handlers
+
+Auth ..> AuthModule
+Validate ..> Schemas
+Handlers ..> AuthModule
+Handlers ..> Utils
+Handlers ..> OpenApi
+Handlers ..> Data
+
+Env ..> Index : configuration
+@enduml
