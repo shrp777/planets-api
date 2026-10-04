@@ -11,7 +11,6 @@ import {
   SORTABLE_FIELDS,
   TOKEN_DELIVERIES,
 } from "./types";
-import { slugify } from "./utils";
 
 const planetIds = planets.map((p) => p.id);
 
@@ -62,14 +61,9 @@ const oneOf = <const T extends readonly [string, ...string[]]>(values: T) =>
 
 // Ni le statut ni la date de lancement ne sont acceptés à la création : une
 // mission est toujours créée avec le statut planned, et n'est lancée que
-// lorsqu'elle devient active. L'identifiant est dérivé du nom
+// lorsqu'elle devient active. L'identifiant est généré par le serveur
 export const missionCreationSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .refine((name) => slugify(name) !== "", {
-      error: "expected at least one letter or digit",
-    }),
+  name: z.string().trim().min(1),
   agency: oneOf(AGENCIES),
   planets: z
     .array(planetId)

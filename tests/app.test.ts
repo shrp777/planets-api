@@ -14,6 +14,16 @@ process.env.JWT_SECRET = "test-secret";
 process.env.CORS_ORIGIN = "http://localhost:5173";
 
 const ids = (body: { data: { id: string }[] }) => body.data.map((p) => p.id);
+const names = (body: { data: { name: string }[] }) =>
+  body.data.map((m) => m.name);
+
+// Identifiants (UUID) de quelques missions d'origine
+const PIONEER_11 = "ad7c914b-3caf-493a-a2a6-de89c26351bb";
+const MARINER_10 = "0a1750be-dcdc-4070-aea1-c38628104eb5";
+const VOYAGER_2 = "0c262d45-6bf0-427a-940d-6b02827a0e15";
+const JUNO = "86772d6f-cba8-4d8b-baf3-3aea860a72e3";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 describe("GET /", () => {
   test("lists the endpoints", async () => {
@@ -238,7 +248,7 @@ const authRequest = async (path: string) =>
 
 describe("GET /missions", () => {
   test("requires a token on every missions route", async () => {
-    for (const path of ["/missions", "/missions/juno", "/missions/apollo-11"]) {
+    for (const path of ["/missions", `/missions/${JUNO}`, "/missions/apollo-11"]) {
       const res = await app.request(path);
       expect(res.status).toBe(401);
       expect(res.headers.get("WWW-Authenticate")).toBe("Bearer");
@@ -271,45 +281,45 @@ describe("GET /missions", () => {
     expect(body.success).toBe(true);
     expect(body.data).toHaveLength(18);
     expect(body.data[0]).toEqual({
-      id: "pioneer-11",
+      id: PIONEER_11,
       name: "Pioneer 11",
       agency: "NASA",
       launchDate: "1973-04-06",
       status: "completed",
-      links: { self: "/missions/pioneer-11" },
+      links: { self: `/missions/${PIONEER_11}` },
     });
   });
 
   test("filters by planet", async () => {
     const res = await authRequest("/missions?planet=saturn");
-    expect(ids(await res.json())).toEqual([
-      "pioneer-11",
-      "voyager-2",
-      "voyager-1",
-      "cassini-huygens",
+    expect(names(await res.json())).toEqual([
+      "Pioneer 11",
+      "Voyager 2",
+      "Voyager 1",
+      "Cassini-Huygens",
     ]);
   });
 
   test("a mission appears under each planet it studied", async () => {
     for (const planet of ["jupiter", "saturn", "uranus", "neptune"]) {
       const res = await authRequest(`/missions?planet=${planet}`);
-      expect(ids(await res.json())).toContain("voyager-2");
+      expect(ids(await res.json())).toContain(VOYAGER_2);
     }
   });
 
   test("filters by the participation of the user of the token", async () => {
     const mine = await authRequest("/missions?participating=true");
-    expect(ids(await mine.json())).toEqual(["juno", "curiosity", "perseverance"]);
+    expect(names(await mine.json())).toEqual(["Juno", "Curiosity", "Perseverance"]);
 
     const others = await authRequest("/missions?participating=false");
     const otherIds = ids(await others.json());
     expect(otherIds).toHaveLength(15);
-    expect(otherIds).not.toContain("juno");
+    expect(otherIds).not.toContain(JUNO);
   });
 
   test("combines participating with the other filters", async () => {
     const res = await authRequest("/missions?participating=true&planet=mars");
-    expect(ids(await res.json())).toEqual(["curiosity", "perseverance"]);
+    expect(names(await res.json())).toEqual(["Curiosity", "Perseverance"]);
   });
 
   test("the participations depend on the user id of the token", async () => {
@@ -368,20 +378,20 @@ describe("GET /missions", () => {
     const res = await authRequest(
       "/missions?planet=mars&status=active&sort=-launchDate",
     );
-    expect(ids(await res.json())).toEqual([
-      "perseverance",
-      "tianwen-1",
-      "curiosity",
-      "mars-express",
+    expect(names(await res.json())).toEqual([
+      "Perseverance",
+      "Tianwen-1",
+      "Curiosity",
+      "Mars Express",
     ]);
   });
 
   test("filters by agency", async () => {
     const res = await authRequest("/missions?agency=ESA");
-    expect(ids(await res.json())).toEqual([
-      "mars-express",
-      "venus-express",
-      "bepicolombo",
+    expect(names(await res.json())).toEqual([
+      "Mars Express",
+      "Venus Express",
+      "BepiColombo",
     ]);
   });
 
@@ -404,9 +414,10 @@ describe("GET /missions", () => {
 
 describe("GET /missions/:id", () => {
   test("returns the mission details with its planets and their links", async () => {
-    const res = await authRequest("/missions/voyager-2");
+    const res = await authRequest(`/missions/${VOYAGER_2}`);
     expect(res.status).toBe(200);
     const body = await res.json();
+    expect(body.data.id).toBe(VOYAGER_2);
     expect(body.data.name).toBe("Voyager 2");
     expect(body.data.launchDate).toBe("1977-08-20");
     expect(body.data.planets).toEqual([
@@ -415,11 +426,11 @@ describe("GET /missions/:id", () => {
       { id: "uranus", name: "Uranus", links: { self: "/planets/uranus" } },
       { id: "neptune", name: "Neptune", links: { self: "/planets/neptune" } },
     ]);
-    expect(body.data.links).toEqual({ self: "/missions/voyager-2" });
+    expect(body.data.links).toEqual({ self: `/missions/${VOYAGER_2}` });
   });
 
   test("lists the planets in the order they were visited", async () => {
-    const res = await authRequest("/missions/mariner-10");
+    const res = await authRequest(`/missions/${MARINER_10}`);
     const planets = (await res.json()).data.planets;
     expect(planets.map((p: { id: string }) => p.id)).toEqual([
       "venus",
@@ -441,7 +452,7 @@ describe("GET /missions/:id", () => {
   });
 
   test("matches the id case-insensitively", async () => {
-    const res = await authRequest("/missions/Voyager-2");
+    const res = await authRequest(`/missions/${VOYAGER_2.toUpperCase()}`);
     expect(res.status).toBe(200);
   });
 
@@ -455,7 +466,7 @@ describe("GET /missions/:id", () => {
   });
 
   test("is kept out of shared caches and revalidated", async () => {
-    const res = await authRequest("/missions/juno");
+    const res = await authRequest(`/missions/${JUNO}`);
     expect(res.headers.get("Cache-Control")).toBe("private, no-cache");
     expect(res.headers.get("ETag")).toBeTruthy();
   });
@@ -479,7 +490,11 @@ const europaClipper = {
 };
 
 // Les missions créées ici restent en mémoire : ces tests sont placés après
-// ceux qui comptent les missions
+// ceux qui comptent les missions. Leurs identifiants, générés par le serveur,
+// sont relevés à la création pour les tests suivants
+let europaClipperId: string;
+let dragonflyId: string;
+
 describe("POST /missions", () => {
   test("requires a token", async () => {
     const res = await app.request("/missions", {
@@ -493,13 +508,16 @@ describe("POST /missions", () => {
   test("creates a planned mission and returns its location", async () => {
     const res = await writeMission("POST", "/missions", europaClipper);
     expect(res.status).toBe(201);
-    expect(res.headers.get("Location")).toBe("/missions/europa-clipper");
     expect(res.headers.get("Cache-Control")).toBeNull();
     expect(res.headers.get("ETag")).toBeNull();
-    expect(await res.json()).toEqual({
+    const body = await res.json();
+    europaClipperId = body.data.id;
+    expect(europaClipperId).toMatch(UUID);
+    expect(res.headers.get("Location")).toBe(`/missions/${europaClipperId}`);
+    expect(body).toEqual({
       success: true,
       data: {
-        id: "europa-clipper",
+        id: europaClipperId,
         name: "Europa Clipper",
         agency: "NASA",
         launchDate: null,
@@ -509,19 +527,19 @@ describe("POST /missions", () => {
           { id: "jupiter", name: "Jupiter", links: { self: "/planets/jupiter" } },
         ],
         description: "Studies the ocean under the ice of Europa.",
-        links: { self: "/missions/europa-clipper" },
+        links: { self: `/missions/${europaClipperId}` },
       },
       message: "Mission Europa Clipper created",
     });
   });
 
   test("keeps the created mission available to the other routes", async () => {
-    const detail = await authRequest("/missions/europa-clipper");
+    const detail = await authRequest(`/missions/${europaClipperId}`);
     expect(detail.status).toBe(200);
     expect((await detail.json()).data.status).toBe("planned");
 
     const planned = await authRequest("/missions?status=planned");
-    expect(ids(await planned.json())).toEqual(["europa-clipper"]);
+    expect(ids(await planned.json())).toEqual([europaClipperId]);
   });
 
   test("ignores a status and a launch date sent by the client", async () => {
@@ -533,6 +551,7 @@ describe("POST /missions", () => {
     });
     expect(res.status).toBe(201);
     const body = await res.json();
+    dragonflyId = body.data.id;
     expect(body.data.status).toBe("planned");
     expect(body.data.launchDate).toBeNull();
   });
@@ -548,26 +567,17 @@ describe("POST /missions", () => {
     expect((await dates("sort=-launchDate")).slice(0, 2)).toEqual([null, null]);
   });
 
-  test("derives the id from the name", async () => {
+  test("generates a new id for each mission, even with the same name", async () => {
     const res = await writeMission("POST", "/missions", {
       ...europaClipper,
-      name: "  Véritas / EnVision 2 ",
+      name: "  Europa Clipper ",
+      id: VOYAGER_2,
     });
     expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body.data.id).toBe("veritas-envision-2");
-    expect(body.data.name).toBe("Véritas / EnVision 2");
-  });
-
-  test("returns 409 when the mission already exists", async () => {
-    for (const name of ["Europa Clipper", "europa clipper", "Voyager 2"]) {
-      const res = await writeMission("POST", "/missions", {
-        ...europaClipper,
-        name,
-      });
-      expect(res.status).toBe(409);
-      expect((await res.json()).success).toBe(false);
-    }
+    expect(body.data.name).toBe("Europa Clipper");
+    expect(body.data.id).toMatch(UUID);
+    expect([europaClipperId, VOYAGER_2]).not.toContain(body.data.id);
   });
 
   test("returns 400 for a malformed body", async () => {
@@ -585,7 +595,7 @@ describe("POST /missions", () => {
 
   test("returns 422 for values that cannot be processed", async () => {
     for (const invalid of [
-      { name: "!!!" },
+      { name: " " },
       { agency: "SpaceX" },
       { planets: [] },
       { planets: ["pluto"] },
@@ -599,7 +609,8 @@ describe("POST /missions", () => {
       });
       expect(res.status).toBe(422);
     }
-    expect((await authRequest("/missions/never-created")).status).toBe(404);
+    const list = await authRequest("/missions");
+    expect(names(await list.json())).not.toContain("Never Created");
   });
 });
 
@@ -608,7 +619,7 @@ describe("PATCH /missions/:id", () => {
     writeMission("PATCH", `/missions/${id}`, { status });
 
   test("requires a token", async () => {
-    const res = await app.request("/missions/europa-clipper", {
+    const res = await app.request(`/missions/${europaClipperId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "active" }),
@@ -617,7 +628,7 @@ describe("PATCH /missions/:id", () => {
   });
 
   test("refuses to skip a status", async () => {
-    const res = await setStatus("europa-clipper", "completed");
+    const res = await setStatus(europaClipperId, "completed");
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
       success: false,
@@ -629,22 +640,22 @@ describe("PATCH /missions/:id", () => {
     // La date de lancement est fixée au passage à active, puis conservée
     const today = new Date().toISOString().slice(0, 10);
     for (const status of ["active", "completed"]) {
-      const res = await setStatus("Europa-Clipper", status);
+      const res = await setStatus(europaClipperId.toUpperCase(), status);
       expect(res.status).toBe(200);
       expect(res.headers.get("Cache-Control")).toBeNull();
       const body = await res.json();
       expect(body.data.status).toBe(status);
       expect(body.data.launchDate).toBe(today);
-      expect(body.data.links).toEqual({ self: "/missions/europa-clipper" });
+      expect(body.data.links).toEqual({ self: `/missions/${europaClipperId}` });
 
-      const detail = await authRequest("/missions/europa-clipper");
+      const detail = await authRequest(`/missions/${europaClipperId}`);
       expect((await detail.json()).data.status).toBe(status);
     }
   });
 
   test("refuses to change a completed mission or to go backwards", async () => {
     for (const status of ["planned", "active", "completed"]) {
-      const res = await setStatus("europa-clipper", status);
+      const res = await setStatus(europaClipperId, status);
       expect(res.status).toBe(409);
       expect((await res.json()).error).toBe(
         "Conflict on status: a completed mission cannot change status anymore",
@@ -653,7 +664,7 @@ describe("PATCH /missions/:id", () => {
   });
 
   test("returns 404 for an unknown mission", async () => {
-    const res = await setStatus("apollo-11", "active");
+    const res = await setStatus(crypto.randomUUID(), "active");
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({
       success: false,
@@ -662,10 +673,11 @@ describe("PATCH /missions/:id", () => {
   });
 
   test("returns 400 for a malformed body and 422 for an unknown status", async () => {
-    expect((await writeMission("PATCH", "/missions/dragonfly", {})).status).toBe(400);
-    expect((await setStatus("dragonfly", 1)).status).toBe(400);
-    expect((await setStatus("dragonfly", "cancelled")).status).toBe(422);
-    const mission = (await (await authRequest("/missions/dragonfly")).json()).data;
+    const path = `/missions/${dragonflyId}`;
+    expect((await writeMission("PATCH", path, {})).status).toBe(400);
+    expect((await setStatus(dragonflyId, 1)).status).toBe(400);
+    expect((await setStatus(dragonflyId, "cancelled")).status).toBe(422);
+    const mission = (await (await authRequest(path)).json()).data;
     expect(mission.status).toBe("planned");
     expect(mission.launchDate).toBeNull();
   });

@@ -31,7 +31,6 @@ import {
 import { estimateTravel } from "./travel";
 import { MISSION_STATUSES, type Mission } from "./types";
 import {
-  slugify,
   sortBy,
   toDetail,
   toMissionDetail,
@@ -278,23 +277,12 @@ app.get("/missions/:id", (c) => {
 // routes mais perdue au redémarrage du serveur
 app.post("/missions", validate("json", missionCreationSchema), (c) => {
   const { name, agency, planets, description } = c.req.valid("json");
-  const id = slugify(name);
 
-  // Chaque valeur est valide, mais l'identifiant dérivé du nom est déjà pris
-  if (missions.some((m) => m.id === id)) {
-    return c.json(
-      {
-        success: false,
-        error: `Conflict on name: mission ${id} already exists`,
-      },
-      409,
-    );
-  }
-
-  // Le statut n'est jamais choisi par le client : toute mission commence
-  // planifiée, donc sans date de lancement
+  // L'identifiant est généré par le serveur : un UUID, unique sans avoir à
+  // consulter les missions existantes. Le statut n'est pas non plus choisi par
+  // le client : toute mission commence planifiée, donc sans date de lancement
   const mission: Mission = {
-    id,
+    id: crypto.randomUUID(),
     name,
     agency,
     launchDate: null,

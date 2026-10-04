@@ -11,7 +11,7 @@ Client -> Auth : GET /missions?participating=true\n+ token
 Auth -> Auth : vérifie la signature\nlit sub et role
 Auth -> Handler : user = { id, role }
 Handler -> Participations : participations de user.id
-Participations --> Handler : juno, curiosity, perseverance
+Participations --> Handler : 3 identifiants de missions
 Handler -> Missions : missions correspondantes
 Missions --> Handler : 3 missions
 Handler --> Client : 200 { data: 3 missions }\nCache-Control: private, no-cache

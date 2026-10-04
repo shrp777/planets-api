@@ -62,7 +62,7 @@ bunx @usebruno/cli run -r --env Local
 | GET     | `/planets/{id}/moons/{moonId}` | Détail d'une lune (ex : `/planets/jupiter/moons/europa`) |
 | GET     | `/missions` | 🔒 Liste résumée des missions spatiales (filtrable, triable) |
 | POST    | `/missions` | 🔒 Création d'une mission, avec le statut `planned` |
-| GET     | `/missions/{id}` | 🔒 Détail d'une mission (ex : `/missions/voyager-2`) |
+| GET     | `/missions/{id}` | 🔒 Détail d'une mission (ex : `/missions/0c262d45-6bf0-427a-940d-6b02827a0e15`) |
 | PATCH   | `/missions/{id}` | 🔒 Mise à jour du statut d'une mission (`active`, puis `completed`) |
 | POST    | `/travel-estimation` | Calcul d'une estimation de trajet entre deux planètes |
 | POST    | `/auth/login` | Authentification, le token JWT est renvoyé dans le corps ou déposé dans un cookie `httpOnly` (champ `delivery`) |
@@ -227,7 +227,7 @@ Paramètres de requête optionnels, combinables :
 
 #### Filtrer selon l'utilisateur connecté
 
-L'API gère une association plusieurs-à-plusieurs entre les utilisateurs et les missions (`src/participations.ts`) : John Doe participe à `juno`, `curiosity` et `perseverance`.
+L'API gère une association plusieurs-à-plusieurs entre les utilisateurs et les missions (`src/participations.ts`) : John Doe participe aux missions Juno, Curiosity et Perseverance.
 
 ```sh
 curl "http://localhost:3000/missions?participating=true" -H "Authorization: Bearer <accessToken>"
@@ -244,12 +244,12 @@ Exemple pour `/missions?planet=uranus` :
   "success": true,
   "data": [
     {
-      "id": "voyager-2",
+      "id": "0c262d45-6bf0-427a-940d-6b02827a0e15",
       "name": "Voyager 2",
       "agency": "NASA",
       "launchDate": "1977-08-20",
       "status": "active",
-      "links": { "self": "/missions/voyager-2" }
+      "links": { "self": "/missions/0c262d45-6bf0-427a-940d-6b02827a0e15" }
     }
   ],
   "message": "List of space missions with summary information"
@@ -260,13 +260,13 @@ Exemple pour `/missions?planet=uranus` :
 
 Route privée, comme `/missions`. Le token est vérifié avant l'identifiant : sans token, une mission inconnue renvoie un `401` et non un `404`.
 
-L'identifiant est insensible à la casse. `planets` liste les planètes étudiées dans l'ordre de visite, avec un lien vers chacune.
+L'identifiant est un UUID, insensible à la casse. `planets` liste les planètes étudiées dans l'ordre de visite, avec un lien vers chacune.
 
 ```json
 {
   "success": true,
   "data": {
-    "id": "voyager-2",
+    "id": "0c262d45-6bf0-427a-940d-6b02827a0e15",
     "name": "Voyager 2",
     "agency": "NASA",
     "launchDate": "1977-08-20",
@@ -278,7 +278,7 @@ L'identifiant est insensible à la casse. `planets` liste les planètes étudié
       { "id": "neptune", "name": "Neptune", "links": { "self": "/planets/neptune" } }
     ],
     "description": "The only spacecraft to have visited all four giant planets, and still the only one to have flown past Uranus and Neptune.",
-    "links": { "self": "/missions/voyager-2" }
+    "links": { "self": "/missions/0c262d45-6bf0-427a-940d-6b02827a0e15" }
   },
   "message": "Detailed information about mission Voyager 2"
 }
@@ -289,7 +289,7 @@ L'identifiant est insensible à la casse. `planets` liste les planètes étudié
 Route privée. Crée une mission dans la collection.
 
 - La mission est toujours créée avec le statut `planned` et sans date de lancement (`"launchDate": null`) : le client ne choisit ni l'un ni l'autre, les champs `status` et `launchDate` envoyés dans le corps sont ignorés.
-- L'identifiant est dérivé du nom : `Europa Clipper` devient `europa-clipper`.
+- L'identifiant est un UUID généré par le serveur : le client ne le choisit pas, un champ `id` envoyé dans le corps est ignoré. Deux missions peuvent donc porter le même nom.
 - Une ressource est créée : la réponse est un `201`, avec l'URL de la mission dans l'en-tête `Location` et sa représentation complète dans le corps.
 - La persistance est simulée : la mission est ajoutée à la liste en mémoire (`src/missions.ts`). Elle est visible par les autres routes, mais perdue au redémarrage du serveur.
 
@@ -297,7 +297,7 @@ Corps de la requête (`Content-Type: application/json`), tous les champs sont ob
 
 | Champ         | Type     | Description                                                   |
 | ------------- | -------- | ------------------------------------------------------------- |
-| `name`        | string   | Nom, avec au moins une lettre ou un chiffre                   |
+| `name`        | string   | Nom, non vide                                                 |
 | `agency`      | string   | `NASA`, `ESA`, `JAXA`, `ISRO` ou `CNSA`                       |
 | `planets`     | string[] | Identifiants des planètes étudiées, au moins un, sans doublon |
 | `description` | string   | Description, non vide                                         |
@@ -311,14 +311,14 @@ curl -i -X POST http://localhost:3000/missions \
 
 ```
 HTTP/1.1 201 Created
-Location: /missions/europa-clipper
+Location: /missions/0b6f1c1e-7d2a-4c53-9a55-3f0e8f6f2b41
 ```
 
 ```json
 {
   "success": true,
   "data": {
-    "id": "europa-clipper",
+    "id": "0b6f1c1e-7d2a-4c53-9a55-3f0e8f6f2b41",
     "name": "Europa Clipper",
     "agency": "NASA",
     "launchDate": null,
@@ -328,7 +328,7 @@ Location: /missions/europa-clipper
       { "id": "jupiter", "name": "Jupiter", "links": { "self": "/planets/jupiter" } }
     ],
     "description": "Studies the ocean under the ice of Europa.",
-    "links": { "self": "/missions/europa-clipper" }
+    "links": { "self": "/missions/0b6f1c1e-7d2a-4c53-9a55-3f0e8f6f2b41" }
   },
   "message": "Mission Europa Clipper created"
 }
@@ -338,7 +338,6 @@ Location: /missions/europa-clipper
 | ------ | --------------------------------------------------------------------------------------- |
 | `400`  | JSON illisible, champ manquant ou du mauvais type                                       |
 | `401`  | Token absent, invalide ou expiré                                                        |
-| `409`  | Une mission porte déjà cet identifiant (ex : `Voyager 2`)                               |
 | `422`  | Agence ou planète inconnue, nom ou description vide, planète en double                  |
 
 ### PATCH /missions/{id}
@@ -348,7 +347,7 @@ Route privée. Met à jour le statut d'une mission. Le verbe est `PATCH` car la 
 Le cycle de vie est à sens unique : `planned`, puis `active`, puis `completed`. Seul le statut suivant est accepté : une mission ne saute pas d'étape, ne revient pas en arrière, et une mission `completed` ne change plus.
 
 ```sh
-curl -X PATCH http://localhost:3000/missions/europa-clipper \
+curl -X PATCH http://localhost:3000/missions/0b6f1c1e-7d2a-4c53-9a55-3f0e8f6f2b41 \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{"status": "active"}'
@@ -532,7 +531,6 @@ Le middleware `authenticate` de `src/auth.ts` protège de la même façon toutes
 | ------ | ------------------------------ | --------------------------------------------------------- |
 | 400    | Paramètre de requête invalide, ou corps mal formé | `{ "success": false, "error": "Invalid planet: expected one of: ..." }` |
 | 409    | Corps dont les valeurs sont en conflit | `{ "success": false, "error": "Conflict between from and to: expected two different planets" }` |
-| 409    | Mission déjà existante | `{ "success": false, "error": "Conflict on name: mission voyager-2 already exists" }` |
 | 409    | Changement de statut impossible | `{ "success": false, "error": "Conflict on status: a planned mission can only become active" }` |
 | 422    | Corps bien formé avec une valeur non traitable | `{ "success": false, "error": "Invalid speedKmPerSecond: Too small: expected number to be >0" }` |
 | 401    | Identifiants incorrects | `{ "success": false, "error": "Invalid credentials" }` |

@@ -1,7 +1,7 @@
 meta {
   name: Complete mission
   type: http
-  seq: 16
+  seq: 15
 }
 
 patch {
@@ -18,6 +18,10 @@ body:json {
   {
     "status": "completed"
   }
+}
+
+vars:pre-request {
+  missionId: demo
 }
 
 assert {

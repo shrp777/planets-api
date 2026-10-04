@@ -21,15 +21,6 @@ const moonLinks = (moon: Moon) => ({
   planet: planetLink(moon.planetId),
 });
 
-// Identifiant lisible dérivé du nom : "Europa Clipper" devient "europa-clipper"
-export const slugify = (name: string) =>
-  name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-
 export const toSummary = (planet: Planet): PlanetSummary => {
   const { id, name, order, type } = planet;
   return { id, name, order, type, links: { self: planetLink(id) } };

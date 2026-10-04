@@ -72,7 +72,7 @@ Deux gestionnaires globaux complètent le tout : une route inconnue renvoie un `
 ### Nommage des URL
 
 - Les ressources sont désignées par des **noms au pluriel** : `/planets`, `/missions`.
-- Les identifiants sont des **mots lisibles** (`earth`, `voyager-2`) plutôt que des nombres, et insensibles à la casse.
+- Les identifiants des planètes et des lunes sont des **mots lisibles** (`earth`, `europa`) plutôt que des nombres. Ceux des missions, que les clients peuvent créer, sont des **UUID** générés par le serveur. Tous sont insensibles à la casse.
 - Une opération métier reste nommée par un nom : `/travel-estimation` (une estimation), pas `/estimate-travel`.
 
 ### Enveloppe des réponses
@@ -105,7 +105,7 @@ Chaque représentation porte un objet `links` : son propre lien (`self`) et les 
 | `400` | Requête mal formée : paramètre de requête invalide, JSON illisible, champ manquant ou du mauvais type |
 | `401` | Identifiants incorrects, ou token absent, invalide ou expiré |
 | `404` | La ressource désignée par l'URL n'existe pas |
-| `409` | Valeurs valides isolément mais en conflit entre elles (`from` et `to` identiques) ou avec l'état d'une ressource (mission déjà existante, changement de statut impossible) |
+| `409` | Valeurs valides isolément mais en conflit entre elles (`from` et `to` identiques) ou avec l'état d'une ressource (changement de statut impossible) |
 | `422` | Corps bien formé, mais une valeur ne peut pas être traitée (planète inconnue, vitesse négative) |
 | `500` | Erreur interne |
 

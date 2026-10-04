@@ -78,7 +78,7 @@ Une mission peut étudier plusieurs planètes, et une planète est étudiée par
 
 | Champ | Type | Description |
 | --- | --- | --- |
-| `id` | string | Identifiant (`voyager-2`) |
+| `id` | UUID | Identifiant (`0c262d45-6bf0-427a-940d-6b02827a0e15`) |
 | `name` | string | Nom |
 | `agency` | string | Agence principale : `NASA`, `ESA`, `JAXA`, `ISRO` ou `CNSA` |
 | `launchDate` | string ou `null` | Date de lancement, au format `AAAA-MM-JJ` ; `null` tant que la mission est `planned` |
@@ -88,15 +88,16 @@ Une mission peut étudier plusieurs planètes, et une planète est étudiée par
 
 - Dans les données, `planets` est une liste d'identifiants. Dans le détail d'une mission, chaque planète est renvoyée sous forme de **référence** : `id`, `name` et lien `self`, ce qui évite au client une requête par planète pour afficher leurs noms.
 - La relation se parcourt dans les deux sens : le détail d'une planète porte le lien `/missions?planet={id}`, le détail d'une mission liste ses planètes.
+- Contrairement aux planètes et aux lunes, dont l'identifiant est un mot lisible, une mission est identifiée par un **UUID** : les missions peuvent être créées par les clients, et un identifiant généré ne dépend ni du nom ni des missions déjà présentes.
 - Les routes des missions sont **privées** (voir [Authentification](authentification.md)).
 
 ### Création
 
 La mission est la seule ressource que l'API permet de créer et de modifier. `POST /missions` ajoute une mission à la collection.
 
-- Le client envoie `name`, `agency`, `planets` et `description`. Il ne choisit ni l'identifiant, dérivé du nom (`Europa Clipper` devient `europa-clipper`), ni le statut, toujours `planned`, ni la date de lancement, encore inconnue (`null`).
+- Le client envoie `name`, `agency`, `planets` et `description`. Il ne choisit ni l'identifiant, un UUID généré par le serveur, ni le statut, toujours `planned`, ni la date de lancement, encore inconnue (`null`).
 - La réponse est un `201` : elle porte l'URL de la nouvelle mission dans l'en-tête `Location` et sa représentation complète dans le corps.
-- Si l'identifiant est déjà pris, la réponse est un `409` : la requête est valide, mais en conflit avec une ressource existante.
+- Un UUID est unique sans que le serveur ait à consulter les missions existantes : la création ne peut pas entrer en conflit avec une autre mission, et deux missions peuvent porter le même nom.
 
 ### Cycle de vie
 
@@ -128,7 +129,7 @@ L'API ne connaît qu'un utilisateur, défini dans `src/auth.ts`.
 
 Le mot de passe n'est conservé que sous forme d'empreinte argon2id et n'apparaît dans aucune réponse.
 
-La **participation** associe un utilisateur à une mission (`src/participations.ts`, paires `userId` / `missionId`). John Doe participe à `juno`, `curiosity` et `perseverance`.
+La **participation** associe un utilisateur à une mission (`src/participations.ts`, paires `userId` / `missionId`). John Doe participe aux missions Juno, Curiosity et Perseverance.
 
 Cette association n'a pas de route propre. Elle s'exprime par le filtre `participating` de `/missions` :
 
