@@ -14,6 +14,10 @@ params:path {
   id: {{plannedMissionId}}
 }
 
+vars:pre-request {
+  plannedMissionId: 3747ade9-356f-4c3e-b13e-50f820eabac1
+}
+
 assert {
   res.status: eq 204
 }
